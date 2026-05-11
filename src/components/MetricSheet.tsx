@@ -1,0 +1,238 @@
+import { useEffect, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "../db";
+import {
+  METRIC_CONFIG,
+  addToDaily,
+  computeStreak,
+  getGoal,
+  setDailyValue,
+  setGoal,
+  startOfToday,
+  type DailyMetricType,
+} from "../lib/health";
+
+interface Props {
+  type: DailyMetricType | null;
+  onClose: () => void;
+}
+
+export default function MetricSheet({ type, onClose }: Props) {
+  const open = type !== null;
+
+  // Keep the last-rendered metric so content stays during the close animation.
+  const [renderType, setRenderType] = useState<DailyMetricType | null>(type);
+  useEffect(() => {
+    if (type !== null) setRenderType(type);
+  }, [type]);
+
+  const t = renderType;
+  const config = t ? METRIC_CONFIG[t] : null;
+
+  const today = startOfToday();
+  const log = useLiveQuery(
+    () =>
+      t
+        ? db.health_logs.where("[date+type]").equals([today, t]).first()
+        : Promise.resolve(undefined),
+    [t, today],
+  );
+  const value = log?.value ?? 0;
+  const goal =
+    useLiveQuery(() => (t ? getGoal(t) : Promise.resolve(0)), [t]) ?? 0;
+  const streak =
+    useLiveQuery(() => (t ? computeStreak(t) : Promise.resolve(0)), [t]) ?? 0;
+
+  const [setDraft, setSetDraft] = useState("");
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalDraft, setGoalDraft] = useState("");
+
+  // Reset drafts when the sheet opens or switches metrics.
+  useEffect(() => {
+    if (open) {
+      setSetDraft("");
+      setEditingGoal(false);
+      setGoalDraft("");
+    }
+  }, [open, t]);
+
+  const submitSet = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!t) return;
+    const v = parseFloat(setDraft);
+    if (Number.isNaN(v) || v < 0) return;
+    setDailyValue(t, v);
+    setSetDraft("");
+  };
+
+  const submitGoal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!t) return;
+    const v = parseFloat(goalDraft);
+    if (Number.isNaN(v) || v <= 0) return;
+    setGoal(t, v);
+    setEditingGoal(false);
+    setGoalDraft("");
+  };
+
+  const pct = goal > 0 ? Math.min(100, (value / goal) * 100) : 0;
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
+          open ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      />
+      <div
+        className={`absolute inset-x-0 bottom-0 z-40 flex max-h-[85%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
+          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+        }`}
+        style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
+      >
+        <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-border-strong" />
+
+        {config && (
+          <>
+            <div className="flex items-center justify-between px-[18px] pb-2.5 pt-3.5">
+              <span className="text-sm font-medium uppercase tracking-[0.04em] text-muted">
+                {config.label}
+              </span>
+              <button
+                onClick={onClose}
+                className="px-1.5 py-1 text-base text-accent-fg"
+              >
+                Done
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-[18px] pb-8 [&::-webkit-scrollbar]:hidden">
+              {/* Big value + goal */}
+              <div className="text-center pt-2">
+                <div className="font-mono text-[44px] font-medium leading-none tracking-[-0.025em] text-fg">
+                  {config.format(value)}
+                  {config.unit && (
+                    <span className="ml-1 text-2xl text-muted">
+                      {config.unit}
+                    </span>
+                  )}
+                </div>
+                {!editingGoal ? (
+                  <button
+                    onClick={() => {
+                      setEditingGoal(true);
+                      setGoalDraft(String(goal));
+                    }}
+                    className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-subtle hover:text-fg"
+                  >
+                    of {config.format(goal)}
+                    {config.unit} goal · edit
+                  </button>
+                ) : (
+                  <form
+                    onSubmit={submitGoal}
+                    className="mt-2 flex items-center justify-center gap-1.5"
+                  >
+                    <input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      autoFocus
+                      value={goalDraft}
+                      onChange={(e) => setGoalDraft(e.target.value)}
+                      className="w-24 rounded-[8px] border border-border bg-surface px-2 py-1 text-center font-mono text-sm outline-none"
+                    />
+                    <span className="text-xs text-muted">{config.unit}</span>
+                    <button
+                      type="submit"
+                      className="rounded-[8px] bg-accent px-2.5 py-1 text-xs font-medium text-[#0a160d]"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingGoal(false)}
+                      className="rounded-[8px] px-2 py-1 text-xs text-subtle hover:text-fg"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {/* Progress bar */}
+              <div className="mt-5 h-1 overflow-hidden rounded-[1px] bg-surface-2">
+                <span
+                  className="block h-full bg-accent transition-[width]"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+
+              {/* Streak */}
+              <div className="mt-4 text-center font-mono text-sm">
+                {streak === 0 ? (
+                  <span className="text-muted">no streak yet</span>
+                ) : (
+                  <span className="text-accent-fg">
+                    {streak}-day streak
+                  </span>
+                )}
+              </div>
+
+              {/* Quick add */}
+              {config.quickAdds.length > 0 && (
+                <div className="mt-6 grid grid-cols-3 gap-2">
+                  {config.quickAdds.map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => addToDaily(t!, d)}
+                      className="rounded-[10px] border border-border bg-surface px-3 py-2.5 text-sm font-medium text-fg hover:border-border-strong active:scale-[0.98]"
+                    >
+                      +{config.format(d)}
+                      {config.unit}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Set exact value */}
+              <form onSubmit={submitSet} className="mt-3 flex gap-2">
+                <input
+                  type="number"
+                  step="any"
+                  inputMode="decimal"
+                  value={setDraft}
+                  onChange={(e) => setSetDraft(e.target.value)}
+                  placeholder={`Set total (${config.unit || "value"})`}
+                  className="flex-1 rounded-[10px] border border-border bg-surface px-3 py-2.5 text-sm outline-none placeholder:text-subtle"
+                />
+                <button
+                  type="submit"
+                  disabled={!setDraft.trim()}
+                  className={`rounded-[10px] px-4 py-2.5 text-sm font-medium transition ${
+                    setDraft.trim()
+                      ? "bg-accent text-[#0a160d]"
+                      : "bg-surface-2 text-subtle"
+                  }`}
+                >
+                  Set
+                </button>
+              </form>
+
+              {/* Reset */}
+              {value > 0 && (
+                <button
+                  onClick={() => setDailyValue(t!, 0)}
+                  className="mt-3 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-subtle hover:border-border-strong hover:text-fg"
+                >
+                  Reset to 0
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}

@@ -1,0 +1,304 @@
+import { useEffect, useMemo, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { Card, Section } from "../components/primitives";
+import ActivityHeatmap from "../components/ActivityHeatmap";
+import { db } from "../db";
+import type { Exercise, Workout, WorkoutTemplate } from "../db/types";
+import {
+  cloneWorkout,
+  countPRsInWorkout,
+  deleteTemplate,
+  ensureStarterLibrary,
+  formatDuration,
+  runTemplate,
+  startWorkout,
+  totalReps,
+  totalVolume,
+} from "../lib/fitness";
+import WorkoutSheet from "../components/WorkoutSheet";
+import TemplateSheet, { type TemplateTarget } from "../components/TemplateSheet";
+
+export default function Fitness() {
+  useEffect(() => {
+    ensureStarterLibrary().catch(console.error);
+  }, []);
+
+  const allWorkouts =
+    useLiveQuery(() => db.workouts.orderBy("date").reverse().toArray()) ?? [];
+  const active = allWorkouts.find((w) => w.completedAt === undefined) ?? null;
+  const completed = useMemo(
+    () => allWorkouts.filter((w) => w.completedAt !== undefined),
+    [allWorkouts],
+  );
+
+  // Look up exercise library once for muscle-group tags on history rows.
+  const exercises = useLiveQuery(() => db.exercises.toArray()) ?? [];
+  const exerciseById = useMemo(() => {
+    const m = new Map<number, Exercise>();
+    for (const e of exercises) if (e.id !== undefined) m.set(e.id, e);
+    return m;
+  }, [exercises]);
+
+  const [openWorkoutId, setOpenWorkoutId] = useState<number | null>(null);
+  const [templateTarget, setTemplateTarget] = useState<TemplateTarget>(null);
+
+  const templates =
+    useLiveQuery(() =>
+      db.workout_templates.orderBy("createdAt").reverse().toArray(),
+    ) ?? [];
+
+  const startNew = async () => {
+    if (active) {
+      setOpenWorkoutId(active.id!);
+      return;
+    }
+    const id = await startWorkout();
+    setOpenWorkoutId(id);
+  };
+
+  const onRunTemplate = async (templateId: number) => {
+    try {
+      const id = await runTemplate(templateId);
+      setOpenWorkoutId(id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <div className="relative flex h-full flex-col bg-bg">
+      <div className="flex-1 overflow-y-auto px-[18px] pb-[160px] pt-[60px] [&::-webkit-scrollbar]:hidden">
+        <header className="px-1.5 pb-3 pt-3.5">
+          <h1 className="m-0 text-2xl font-medium leading-[1.05] tracking-[-0.025em]">
+            Fitness
+          </h1>
+          <div className="mt-1.5 font-mono text-xs tracking-[0.02em] text-muted">
+            {completed.length}{" "}
+            {completed.length === 1 ? "workout" : "workouts"}
+          </div>
+        </header>
+
+        {/* Heatmap */}
+        <div className="mb-3">
+          <ActivityHeatmap workouts={allWorkouts} />
+        </div>
+
+        <button
+          onClick={startNew}
+          className={`mb-3 flex w-full items-center justify-center gap-2 rounded-[14px] px-4 py-3 text-sm font-medium active:scale-[0.99] ${
+            active
+              ? "border border-accent bg-accent-soft text-accent-fg"
+              : "bg-accent text-[#0a160d]"
+          }`}
+        >
+          {active ? "Resume Workout" : "+ Start a Workout"}
+        </button>
+
+        {/* Templates */}
+        <Section
+          title="Templates"
+          meta={templates.length > 0 ? `${templates.length}` : ""}
+        >
+          <Card>
+            {templates.length === 0 && (
+              <div className="px-3.5 py-3 text-sm text-muted">
+                No templates yet. Tap "+ New template" below to save a workout
+                shape you can run again.
+              </div>
+            )}
+            {templates.map((t) => (
+              <TemplateRow
+                key={t.id}
+                template={t}
+                onRun={() => onRunTemplate(t.id!)}
+                onEdit={() => setTemplateTarget(t.id!)}
+                onDelete={async () => {
+                  if (confirm(`Delete template "${t.name}"?`)) {
+                    await deleteTemplate(t.id!);
+                  }
+                }}
+              />
+            ))}
+            <button
+              onClick={() => setTemplateTarget("new")}
+              className="flex w-full items-center justify-center gap-2 border-t border-border px-3.5 py-2.5 text-sm font-medium text-accent-fg hover:bg-surface-2"
+            >
+              + New template
+            </button>
+          </Card>
+        </Section>
+
+        {completed.length === 0 ? (
+          <div className="mt-4 rounded-[16px] border border-dashed border-border bg-surface px-5 py-8 text-center text-sm text-muted">
+            No completed workouts yet. Tap{" "}
+            <span className="text-fg">+ Start a Workout</span> to begin.
+          </div>
+        ) : (
+          <Section title="History" meta={`${completed.length}`}>
+            <Card>
+              {completed.map((w) => (
+                <WorkoutRow
+                  key={w.id}
+                  workout={w}
+                  allWorkouts={completed}
+                  exerciseById={exerciseById}
+                  onClick={() => setOpenWorkoutId(w.id!)}
+                  onClone={async () => {
+                    const id = await cloneWorkout(w.id!);
+                    setOpenWorkoutId(id);
+                  }}
+                />
+              ))}
+            </Card>
+          </Section>
+        )}
+      </div>
+
+      <WorkoutSheet
+        workoutId={openWorkoutId}
+        onClose={() => setOpenWorkoutId(null)}
+        onSwitchWorkout={(newId) => setOpenWorkoutId(newId)}
+      />
+
+      <TemplateSheet
+        target={templateTarget}
+        onClose={() => setTemplateTarget(null)}
+      />
+    </div>
+  );
+}
+
+function TemplateRow({
+  template, onRun, onEdit, onDelete,
+}: {
+  template: WorkoutTemplate;
+  onRun: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 border-t border-border px-3.5 py-2.5 first:border-t-0">
+      <button
+        onClick={onEdit}
+        className="min-w-0 flex-1 text-left"
+      >
+        <div className="truncate text-base leading-tight text-fg">
+          {template.name}
+        </div>
+        <div className="mt-0.5 font-mono text-[11px] text-muted">
+          {template.exercises.length}{" "}
+          {template.exercises.length === 1 ? "exercise" : "exercises"}
+          {template.useCount > 0 && ` · used ${template.useCount}×`}
+        </div>
+      </button>
+      <button
+        onClick={onRun}
+        className="rounded-[8px] bg-accent px-3 py-1.5 text-xs font-medium text-[#0a160d] active:scale-[0.98]"
+      >
+        Run
+      </button>
+      <button
+        onClick={onDelete}
+        aria-label="Delete template"
+        className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-[8px] text-subtle opacity-50 hover:bg-surface-2 hover:text-fg hover:opacity-100"
+      >
+        <XIcon />
+      </button>
+    </div>
+  );
+}
+
+const XIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+    <path d="M2 2l7 7M9 2l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+/* -------------------- Workout row -------------------- */
+
+function WorkoutRow({
+  workout, allWorkouts, exerciseById, onClick, onClone,
+}: {
+  workout: Workout;
+  allWorkouts: Workout[];
+  exerciseById: Map<number, Exercise>;
+  onClick: () => void;
+  onClone: () => void;
+}) {
+  const date = new Date(workout.date);
+  const dateStr = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const exerciseCount = workout.exercises.length;
+  const volume = totalVolume(workout);
+  const reps = totalReps(workout);
+  const prCount = countPRsInWorkout(workout, allWorkouts);
+
+  const muscleGroups = useMemo(() => {
+    const set = new Set<string>();
+    for (const ex of workout.exercises) {
+      if (ex.exerciseId !== undefined) {
+        const lib = exerciseById.get(ex.exerciseId);
+        if (lib) {
+          for (const g of lib.muscleGroups) set.add(g);
+        }
+      }
+    }
+    return Array.from(set);
+  }, [workout, exerciseById]);
+
+  return (
+    <div
+      onClick={onClick}
+      className="group flex cursor-pointer items-start gap-3 border-t border-border px-3.5 py-3 first:border-t-0 hover:bg-surface-2"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <div className="text-base leading-tight">{workout.name}</div>
+          {prCount > 0 && (
+            <span className="rounded-[6px] bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent-fg">
+              {prCount} PR{prCount > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 font-mono text-xs text-muted">
+          {dateStr} · {exerciseCount}{" "}
+          {exerciseCount === 1 ? "exercise" : "exercises"}
+          {workout.durationSec ? ` · ${formatDuration(workout.durationSec)}` : ""}
+        </div>
+        {muscleGroups.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {muscleGroups.slice(0, 4).map((g) => (
+              <span
+                key={g}
+                className="rounded-[5px] border border-border bg-bg px-1.5 py-0.5 text-[10px] text-muted"
+              >
+                {g}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        <div className="text-right">
+          <div className="font-mono text-sm text-fg">
+            {Math.round(volume).toLocaleString()}
+            <span className="text-xs text-muted"> lb</span>
+          </div>
+          <div className="font-mono text-xs text-muted">{reps} reps</div>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClone();
+          }}
+          className="rounded-[6px] border border-border bg-bg px-1.5 py-0.5 text-[10px] text-subtle hover:border-border-strong hover:text-fg"
+          aria-label="Repeat this workout"
+        >
+          Repeat
+        </button>
+      </div>
+    </div>
+  );
+}

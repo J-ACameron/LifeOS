@@ -1,0 +1,233 @@
+// Domain types for Life OS Dexie database.
+// Field shapes are deliberately permissive so AI-generated entries can fill
+// what they know without rejecting the write.
+
+export type Priority = 'low' | 'med' | 'high'
+export type TaskStatus = 'pending' | 'in_progress' | 'completed'
+export type TaskSource = 'manual' | 'email' | 'calendar' | 'ai'
+
+export interface Settings {
+  key: string
+  value: unknown
+  updatedAt: number
+}
+
+export interface Task {
+  id?: number
+  title: string
+  description?: string
+  dueDate?: number
+  priority: Priority
+  status: TaskStatus
+  source: TaskSource
+  calendarEventId?: string
+  emailId?: string
+  goalId?: number
+  tags?: string[]
+  createdAt: number
+  completedAt?: number
+}
+
+export interface WorkoutSet {
+  reps: number
+  weight: number
+  rpe?: number // 1-10 rate of perceived exertion
+  restSec?: number
+  completedAt?: number // undefined = not yet performed
+}
+
+// A single exercise as logged within a workout. References an Exercise from
+// the library by id, but snapshots the name so renames/deletes don't rewrite
+// history.
+export interface WorkoutExercise {
+  exerciseId?: number
+  exerciseName: string
+  sets: WorkoutSet[]
+  notes?: string
+}
+
+export interface Workout {
+  id?: number
+  date: number
+  name: string
+  exercises: WorkoutExercise[]
+  durationSec?: number
+  notes?: string
+  aiSummary?: string
+  startedAt: number
+  completedAt?: number // undefined = workout in progress
+  createdAt: number
+}
+
+// Exercise library entry. Reusable across workouts.
+export type EquipmentType =
+  | 'barbell'
+  | 'dumbbell'
+  | 'machine'
+  | 'cable'
+  | 'bodyweight'
+  | 'cardio'
+  | 'other'
+
+export interface Exercise {
+  id?: number
+  name: string
+  muscleGroups: string[]
+  equipment: EquipmentType
+  unilateral?: boolean
+  notes?: string
+  isCustom: boolean
+  createdAt: number
+  lastUsedAt?: number
+  useCount: number
+}
+
+// A reusable workout template — just a name + the list of exercises that
+// belong to it. No sets/reps/weights baked in; those are filled in at run
+// time.
+export interface WorkoutTemplate {
+  id?: number
+  name: string
+  exercises: { exerciseId: number; exerciseName: string }[]
+  notes?: string
+  createdAt: number
+  lastUsedAt?: number
+  useCount: number
+}
+
+export interface Macros {
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+}
+
+export interface Meal {
+  id?: number
+  date: number
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  description: string
+  items?: { name: string; amount?: string }[]
+  macros: Macros
+  source: 'manual' | 'plan' | 'ai'
+  createdAt: number
+}
+
+// A reusable food in the user's library — defines per-serving macros.
+export interface Food {
+  id?: number
+  name: string
+  brand?: string
+  servingSize: string // free-text: "1 cup", "100 g", "1 medium"
+  servingGrams?: number // optional gram-equivalent for normalization
+  macros: Macros // macros for ONE serving
+  notes?: string
+  createdAt: number
+  lastUsedAt?: number
+  useCount: number
+}
+
+// A logged food entry on a specific day + meal slot. Macros are denormalized
+// (snapshotted at log time) so editing or deleting the source food doesn't
+// rewrite history.
+export interface MealEntry {
+  id?: number
+  date: number // start-of-day timestamp
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  foodId: number
+  foodName: string
+  servings: number
+  macros: Macros // already scaled by servings
+  notes?: string
+  createdAt: number
+}
+
+export interface Transaction {
+  id?: number
+  date: number
+  amount: number
+  merchant?: string
+  description: string
+  category?: string
+  account?: string
+  source: 'email' | 'manual'
+  emailId?: string
+  createdAt: number
+}
+
+export interface Habit {
+  id?: number
+  name: string
+  frequency: 'daily' | 'weekly' | 'custom'
+  customDays?: number[]
+  streak: number
+  longestStreak: number
+  lastCompleted?: number
+  history: number[]
+  archived?: boolean
+  createdAt: number
+}
+
+export interface Milestone {
+  title: string
+  completed: boolean
+  completedAt?: number
+}
+
+export type GoalTerm = 'short' | 'mid' | 'long'
+
+export interface Goal {
+  id?: number
+  title: string
+  description?: string
+  term: GoalTerm
+  targetDate?: number
+  milestones?: Milestone[]
+  progress: number
+  status: 'active' | 'completed' | 'paused'
+  createdAt: number
+  completedAt?: number
+}
+
+export interface GoalJournalEntry {
+  id?: number
+  goalId: number
+  text: string
+  createdAt: number
+}
+
+export interface HealthLog {
+  id?: number
+  date: number
+  type: 'sleep' | 'water' | 'weight' | 'mood' | 'energy' | 'other'
+  value: number
+  unit?: string
+  notes?: string
+  createdAt: number
+}
+
+export interface ChatMessage {
+  id?: number
+  conversationId: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  contextSnapshot?: unknown
+  createdAt: number
+}
+
+export interface CachedBrief {
+  id?: number
+  type: 'morning' | 'evening' | 'weekly'
+  date: string
+  content: string
+  createdAt: number
+}
+
+export interface CalendarEvent {
+  id: string
+  title: string
+  start: string
+  end: string
+  location?: string
+  description?: string
+}
