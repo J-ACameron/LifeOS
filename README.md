@@ -33,7 +33,7 @@ Every butler can also answer general advice and off-topic questions — they're 
 ## Technical
 
 - **PWA** — installable on Android and iPhone home screen, dark/light themes, mobile-first design
-- **Google Calendar** integration via `@react-oauth/google` (implicit OAuth flow). Gmail scope is also requested for future email-intelligence features.
+- **Google Calendar** integration via `@react-oauth/google` (implicit OAuth flow).
 - **Built on Claude AI** via the Anthropic SDK — Sonnet 4.6 with adaptive thinking for the heavier butlers (Jarvis, Sebastian, Cornelius) and weekly review; Haiku 4.5 for the lighter ones (Alfred, Benson). User provides their own Anthropic API key, stored on the device.
 - **Tool use** — Jarvis, Sebastian, and Alfred actually take actions, not just give advice. The tool-use loop runs up to 6 iterations per turn with results streamed back as inline confirmations.
 - **All data local** — Dexie (IndexedDB) holds the entire database. Schema v5 with 14 tables. No accounts, no backend, no analytics.
