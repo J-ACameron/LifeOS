@@ -59,7 +59,10 @@ export function GoogleAuthButton() {
   const loginSilent = useGoogleLogin({
     flow: 'implicit',
     scope: GOOGLE_SCOPES.join(' '),
-    prompt: '',
+    // 'none' means STRICTLY silent — Google must NOT show any UI; if it
+    // can't refresh silently (signed out, missing consent, iOS cookies
+    // wiped) it returns an error and we leave the existing token alone.
+    prompt: 'none',
     onSuccess: async (tr) => {
       try {
         // Reuse cached user identity — silent renewal doesn't change who
