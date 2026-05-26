@@ -85,7 +85,7 @@ export function ChatDock({
   onOpen, placeholder = "Ask Claude…",
 }: { onOpen: () => void; placeholder?: string }) {
   return (
-    <div className="absolute inset-x-0 bottom-[64px] z-20 border-t border-border bg-bg/80 px-3.5 pb-3 pt-2.5 backdrop-blur-xl backdrop-saturate-150">
+    <div className="absolute inset-x-0 bottom-[64px] z-20 border-t border-border bg-bg px-3.5 pb-3 pt-2.5">
       <div
         onClick={onOpen}
         role="button"

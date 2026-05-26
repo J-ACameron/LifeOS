@@ -90,12 +90,18 @@ export default function App() {
         onOpen={() => setChatOpen(true)}
         placeholder={COACH_CONFIG[tabToCoachKey(tab)].placeholder}
       />
-      <Chat
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        coachKey={tabToCoachKey(tab)}
-      />
-      <MetricSheet type={metricSheet} onClose={() => setMetricSheet(null)} />
+      {chatOpen && (
+        <Chat
+          onClose={() => setChatOpen(false)}
+          coachKey={tabToCoachKey(tab)}
+        />
+      )}
+      {metricSheet && (
+        <MetricSheet
+          type={metricSheet}
+          onClose={() => setMetricSheet(null)}
+        />
+      )}
       {backupOpen && <BackupSheet onClose={() => setBackupOpen(false)} />}
 
       <TabBar value={tab} onChange={setTab} />
@@ -114,7 +120,7 @@ export default function App() {
 
 function TabBar({ value, onChange }: { value: Tab; onChange: (v: Tab) => void }) {
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 flex h-16 border-t border-border bg-bg/95 backdrop-blur-xl">
+    <div className="absolute inset-x-0 bottom-0 z-30 flex h-16 border-t border-border bg-bg">
       <TabButton
         active={value === "home"}
         onClick={() => onChange("home")}

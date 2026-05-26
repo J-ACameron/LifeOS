@@ -28,12 +28,13 @@ function toolsForCoach(key: CoachKey): AppTool[] {
 }
 
 interface Props {
-  open: boolean;
   onClose: () => void;
   coachKey: CoachKey;
 }
 
-export default function Chat({ open, onClose, coachKey }: Props) {
+const TRANSITION_MS = 280;
+
+export default function Chat({ onClose, coachKey }: Props) {
   const coach = COACH_CONFIG[coachKey];
   const conversationId = coach.conversationId;
 
@@ -69,12 +70,24 @@ export default function Chat({ open, onClose, coachKey }: Props) {
     setError(null);
   };
 
+  // Slide-in animation on mount.
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
+
   // Auto-scroll to bottom on changes.
   useEffect(() => {
-    if (open && bodyRef.current) {
+    if (bodyRef.current) {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
     }
-  }, [open, messages.length, streaming, thinking, conversationId]);
+  }, [messages.length, streaming, thinking, conversationId]);
 
   // Reset transient state when switching coaches.
   useEffect(() => {
@@ -183,14 +196,14 @@ export default function Chat({ open, onClose, coachKey }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[92%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
@@ -207,7 +220,7 @@ export default function Chat({ open, onClose, coachKey }: Props) {
             {coach.label}
           </span>
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Done
@@ -288,7 +301,7 @@ export default function Chat({ open, onClose, coachKey }: Props) {
             className="flex h-11 items-center gap-2.5 rounded-full border border-border bg-surface pl-4 pr-1.5"
           >
             <input
-              autoFocus={open}
+              autoFocus
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={coach.placeholder}

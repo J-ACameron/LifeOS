@@ -13,52 +13,45 @@ import {
 } from "../lib/health";
 
 interface Props {
-  type: DailyMetricType | null;
+  // The metric to display. Parent only mounts this component when type is
+  // non-null — there's no internal "closed" state.
+  type: DailyMetricType;
   onClose: () => void;
 }
 
+const TRANSITION_MS = 280;
+
 export default function MetricSheet({ type, onClose }: Props) {
-  const open = type !== null;
+  const t = type;
+  const config = METRIC_CONFIG[t];
 
-  // Keep the last-rendered metric so content stays during the close animation.
-  const [renderType, setRenderType] = useState<DailyMetricType | null>(type);
+  // Slide-in animation on mount.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (type !== null) setRenderType(type);
-  }, [type]);
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
-  const t = renderType;
-  const config = t ? METRIC_CONFIG[t] : null;
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
 
   const today = startOfToday();
   const log = useLiveQuery(
-    () =>
-      t
-        ? db.health_logs.where("[date+type]").equals([today, t]).first()
-        : Promise.resolve(undefined),
+    () => db.health_logs.where("[date+type]").equals([today, t]).first(),
     [t, today],
   );
   const value = log?.value ?? 0;
-  const goal =
-    useLiveQuery(() => (t ? getGoal(t) : Promise.resolve(0)), [t]) ?? 0;
-  const streak =
-    useLiveQuery(() => (t ? computeStreak(t) : Promise.resolve(0)), [t]) ?? 0;
+  const goal = useLiveQuery(() => getGoal(t), [t]) ?? 0;
+  const streak = useLiveQuery(() => computeStreak(t), [t]) ?? 0;
 
   const [setDraft, setSetDraft] = useState("");
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalDraft, setGoalDraft] = useState("");
 
-  // Reset drafts when the sheet opens or switches metrics.
-  useEffect(() => {
-    if (open) {
-      setSetDraft("");
-      setEditingGoal(false);
-      setGoalDraft("");
-    }
-  }, [open, t]);
-
   const submitSet = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!t) return;
     const v = parseFloat(setDraft);
     if (Number.isNaN(v) || v < 0) return;
     setDailyValue(t, v);
@@ -67,7 +60,6 @@ export default function MetricSheet({ type, onClose }: Props) {
 
   const submitGoal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!t) return;
     const v = parseFloat(goalDraft);
     if (Number.isNaN(v) || v <= 0) return;
     setGoal(t, v);
@@ -80,14 +72,14 @@ export default function MetricSheet({ type, onClose }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex max-h-[85%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
@@ -100,7 +92,7 @@ export default function MetricSheet({ type, onClose }: Props) {
                 {config.label}
               </span>
               <button
-                onClick={onClose}
+                onClick={close}
                 className="px-1.5 py-1 text-base text-accent-fg"
               >
                 Done
@@ -186,7 +178,7 @@ export default function MetricSheet({ type, onClose }: Props) {
                   {config.quickAdds.map((d) => (
                     <button
                       key={d}
-                      onClick={() => addToDaily(t!, d)}
+                      onClick={() => addToDaily(t, d)}
                       className="rounded-[10px] border border-border bg-surface px-3 py-2.5 text-sm font-medium text-fg hover:border-border-strong active:scale-[0.98]"
                     >
                       +{config.format(d)}
@@ -223,7 +215,7 @@ export default function MetricSheet({ type, onClose }: Props) {
               {/* Reset */}
               {value > 0 && (
                 <button
-                  onClick={() => setDailyValue(t!, 0)}
+                  onClick={() => setDailyValue(t, 0)}
                   className="mt-3 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-subtle hover:border-border-strong hover:text-fg"
                 >
                   Reset to 0
