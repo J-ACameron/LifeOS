@@ -3,7 +3,12 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Card, Section } from "../components/primitives";
 import ActivityHeatmap from "../components/ActivityHeatmap";
 import { db } from "../db";
-import type { Exercise, Workout, WorkoutTemplate } from "../db/types";
+import type {
+  CardioSession,
+  Exercise,
+  Workout,
+  WorkoutTemplate,
+} from "../db/types";
 import {
   cloneWorkout,
   countPRsInWorkout,
@@ -15,8 +20,11 @@ import {
   totalReps,
   totalVolume,
 } from "../lib/fitness";
+import { installPPLULProgram } from "../lib/pplul";
+import { CARDIO_LABELS, deleteCardioSession } from "../lib/cardio";
 import WorkoutSheet from "../components/WorkoutSheet";
 import TemplateSheet, { type TemplateTarget } from "../components/TemplateSheet";
+import CardioSheet from "../components/CardioSheet";
 
 export default function Fitness() {
   useEffect(() => {
@@ -41,11 +49,34 @@ export default function Fitness() {
 
   const [openWorkoutId, setOpenWorkoutId] = useState<number | null>(null);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget>(null);
+  const [cardioOpen, setCardioOpen] = useState(false);
 
   const templates =
     useLiveQuery(() =>
       db.workout_templates.orderBy("createdAt").reverse().toArray(),
     ) ?? [];
+  const pplulInstalled = templates.some((t) => t.name.startsWith("PPLUL"));
+
+  const cardioSessions =
+    useLiveQuery(() =>
+      db.cardio_sessions.orderBy("date").reverse().toArray(),
+    ) ?? [];
+
+  const onInstallPPLUL = async () => {
+    if (
+      pplulInstalled &&
+      !confirm(
+        "Reinstall the PPLUL program? This replaces the 5 PPLUL templates with the original program definition.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await installPPLULProgram();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   const startNew = async () => {
     if (active) {
@@ -125,6 +156,14 @@ export default function Fitness() {
             >
               + New template
             </button>
+            <button
+              onClick={onInstallPPLUL}
+              className="flex w-full items-center justify-center gap-2 border-t border-border px-3.5 py-2.5 text-sm font-medium text-accent-fg hover:bg-surface-2"
+            >
+              {pplulInstalled
+                ? "↻ Reinstall PPLUL program"
+                : "↓ Install PPLUL 5-day program"}
+            </button>
           </Card>
         </Section>
 
@@ -152,6 +191,29 @@ export default function Fitness() {
             </Card>
           </Section>
         )}
+
+        {/* Cardio */}
+        <Section
+          title="Cardio"
+          meta={cardioSessions.length > 0 ? `${cardioSessions.length}` : ""}
+        >
+          <Card>
+            {cardioSessions.length === 0 && (
+              <div className="px-3.5 py-3 text-sm text-muted">
+                No cardio logged. Aim for 2× Zone 2 and 1× HIIT per week.
+              </div>
+            )}
+            {cardioSessions.slice(0, 8).map((c) => (
+              <CardioRow key={c.id} session={c} />
+            ))}
+            <button
+              onClick={() => setCardioOpen(true)}
+              className="flex w-full items-center justify-center gap-2 border-t border-border px-3.5 py-2.5 text-sm font-medium text-accent-fg hover:bg-surface-2"
+            >
+              + Log cardio
+            </button>
+          </Card>
+        </Section>
       </div>
 
       <WorkoutSheet
@@ -164,6 +226,57 @@ export default function Fitness() {
         target={templateTarget}
         onClose={() => setTemplateTarget(null)}
       />
+
+      <CardioSheet open={cardioOpen} onClose={() => setCardioOpen(false)} />
+    </div>
+  );
+}
+
+function CardioRow({ session }: { session: CardioSession }) {
+  const dateStr = new Date(session.date).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const onDelete = async () => {
+    if (confirm("Delete this cardio session?")) {
+      await deleteCardioSession(session.id!);
+    }
+  };
+  return (
+    <div className="flex items-center gap-3 border-t border-border px-3.5 py-2.5 first:border-t-0">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span
+            className={`rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium ${
+              session.kind === "hiit"
+                ? "bg-accent-soft text-accent-fg"
+                : "border border-border bg-bg text-muted"
+            }`}
+          >
+            {CARDIO_LABELS[session.kind]}
+          </span>
+          {session.modality && (
+            <span className="truncate text-sm text-fg">
+              {session.modality}
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 font-mono text-[11px] text-muted">
+          {dateStr}
+          {session.notes ? ` · ${session.notes}` : ""}
+        </div>
+      </div>
+      <div className="font-mono text-sm text-fg">
+        {session.durationMin}
+        <span className="text-xs text-muted"> min</span>
+      </div>
+      <button
+        onClick={onDelete}
+        aria-label="Delete cardio session"
+        className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-[8px] text-subtle opacity-50 hover:bg-surface-2 hover:text-fg hover:opacity-100"
+      >
+        <XIcon />
+      </button>
     </div>
   );
 }

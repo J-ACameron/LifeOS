@@ -5,6 +5,7 @@ import Fitness from "./screens/Fitness";
 import Macros from "./screens/Macros";
 import Health from "./screens/Health";
 import Goals from "./screens/Goals";
+import Notes from "./screens/Notes";
 import Chat from "./screens/Chat";
 import { ChatDock } from "./components/primitives";
 import { GoogleAuthButton } from "./components/GoogleAuthButton";
@@ -18,7 +19,7 @@ import { COACH_CONFIG, type CoachKey } from "./lib/coaches";
 export const OPEN_BACKUP_EVENT = "lifeos:open-backup";
 
 const THEME_KEY = "lifeos:theme";
-type Tab = "home" | "calendar" | "fitness" | "macros" | "health" | "goals";
+type Tab = "home" | "calendar" | "fitness" | "macros" | "health" | "goals" | "notes";
 
 function tabToCoachKey(tab: Tab): CoachKey {
   switch (tab) {
@@ -26,7 +27,8 @@ function tabToCoachKey(tab: Tab): CoachKey {
     case "macros": return "macros";
     case "health": return "health";
     case "goals": return "goals";
-    default: return "home"; // home + calendar share the Today coach
+    // notes shares the Today coach until it gets its own butler
+    default: return "home";
   }
 }
 
@@ -67,17 +69,17 @@ export default function App() {
     return () => document.removeEventListener(OPEN_BACKUP_EVENT, open);
   }, []);
 
+  // Shared handler so Home and Health both open the same MetricSheet for
+  // sleep/water — calories still bounce over to the Macros tab.
+  const openMetric = (m: DailyMetricType) => {
+    if (m === "calories") setTab("macros");
+    else setMetricSheet(m);
+  };
+
   return (
     <main className="relative mx-auto h-dvh max-w-[640px] overflow-hidden bg-bg">
       {tab === "home" ? (
-        <Home
-          onOpenMetric={(m) => {
-            // Calories are managed in the Macros tab — tapping the tile
-            // navigates there instead of opening an editor sheet.
-            if (m === "calories") setTab("macros");
-            else setMetricSheet(m);
-          }}
-        />
+        <Home onOpenMetric={openMetric} />
       ) : tab === "calendar" ? (
         <Calendar />
       ) : tab === "fitness" ? (
@@ -85,9 +87,11 @@ export default function App() {
       ) : tab === "macros" ? (
         <Macros />
       ) : tab === "health" ? (
-        <Health />
-      ) : (
+        <Health onOpenMetric={openMetric} />
+      ) : tab === "goals" ? (
         <Goals />
+      ) : (
+        <Notes />
       )}
 
       <ChatDock
@@ -154,6 +158,12 @@ function TabBar({ value, onChange }: { value: Tab; onChange: (v: Tab) => void })
         onClick={() => onChange("goals")}
         icon={<TargetIcon />}
         label="Goals"
+      />
+      <TabButton
+        active={value === "notes"}
+        onClick={() => onChange("notes")}
+        icon={<NoteIcon />}
+        label="Notes"
       />
     </div>
   );
@@ -222,6 +232,27 @@ function HeartIcon() {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+function NoteIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <rect
+        x="4"
+        y="3"
+        width="12"
+        height="14"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M7 7h6M7 10h6M7 13h4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
       />
     </svg>
   );

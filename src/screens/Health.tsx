@@ -3,9 +3,15 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Card, Section } from "../components/primitives";
 import { db } from "../db";
 import type { HealthLog } from "../db/types";
-import { startOfToday } from "../lib/health";
+import {
+  computeStreak,
+  getGoal,
+  startOfToday,
+  type DailyMetricType,
+} from "../lib/health";
+import WeightHeatmap from "../components/WeightHeatmap";
 
-type LoggableType = "weight" | "mood" | "energy";
+type LoggableType = "weight" | "sleep" | "water";
 
 interface MetricSpec {
   type: LoggableType;
@@ -16,51 +22,79 @@ interface MetricSpec {
   format: (v: number) => string;
 }
 
-const METRICS: MetricSpec[] = [
-  {
-    type: "weight",
-    label: "Weight",
-    unit: "lb",
-    step: "0.1",
-    hint: "Today's weight",
-    format: (v) => v.toFixed(1),
-  },
-  {
-    type: "mood",
-    label: "Mood",
-    unit: "/10",
-    step: "1",
-    hint: "1 = awful · 10 = great",
-    format: (v) => Math.round(v).toString(),
-  },
-  {
-    type: "energy",
-    label: "Energy",
-    unit: "/10",
-    step: "1",
-    hint: "1 = drained · 10 = electric",
-    format: (v) => Math.round(v).toString(),
-  },
-];
+const WEIGHT_SPEC: MetricSpec = {
+  type: "weight",
+  label: "Weight",
+  unit: "lb",
+  step: "0.1",
+  hint: "Today's weight",
+  format: (v) => v.toFixed(1),
+};
 
-export default function Health() {
+const SLEEP_SPEC: MetricSpec = {
+  type: "sleep",
+  label: "Sleep",
+  unit: "h",
+  step: "0.5",
+  hint: "Hours last night",
+  format: (v) => (Number.isInteger(v) ? v.toString() : v.toFixed(1)),
+};
+
+const WATER_SPEC: MetricSpec = {
+  type: "water",
+  label: "Water",
+  unit: "L",
+  step: "0.25",
+  hint: "Liters today",
+  format: (v) => v.toFixed(2),
+};
+
+interface Props {
+  onOpenMetric: (type: DailyMetricType) => void;
+}
+
+export default function Health({ onOpenMetric }: Props) {
   const today = startOfToday();
   const fourteenDaysAgo = today - 13 * 86_400_000;
-  const thirtyDaysAgo = today - 29 * 86_400_000;
+  const ninetyDaysAgo = today - 89 * 86_400_000;
+  // Wide enough that the weight calendar can browse back ~12 months.
+  const windowStart = today - 365 * 86_400_000;
 
   const recentLogs =
     useLiveQuery(
       () =>
         db.health_logs
           .where("date")
-          .between(thirtyDaysAgo, today, true, true)
+          .between(windowStart, today, true, true)
           .toArray(),
-      [thirtyDaysAgo, today],
+      [windowStart, today],
     ) ?? [];
 
   const todayLogs = useMemo(
     () => recentLogs.filter((l) => l.date === today),
     [recentLogs, today],
+  );
+  const weightLogs = useMemo(
+    () => recentLogs.filter((l) => l.type === "weight"),
+    [recentLogs],
+  );
+  const weightLogsTrend = useMemo(
+    () => weightLogs.filter((l) => l.date >= ninetyDaysAgo),
+    [weightLogs, ninetyDaysAgo],
+  );
+  const sleepLogs14 = useMemo(
+    () =>
+      recentLogs.filter(
+        (l) => l.type === "sleep" && l.date >= fourteenDaysAgo,
+      ),
+    [recentLogs, fourteenDaysAgo],
+  );
+  const waterLogs14 = useMemo(
+    () =>
+      recentLogs.filter(
+        (l) => l.type === "water" && l.date >= fourteenDaysAgo,
+      ),
+    [recentLogs, fourteenDaysAgo],
   );
 
   return (
@@ -71,52 +105,43 @@ export default function Health() {
             Health
           </h1>
           <div className="mt-1.5 font-mono text-xs tracking-[0.02em] text-muted">
-            weight · mood · energy
+            weight · sleep · water
           </div>
         </header>
 
         <Section title="Today">
           <Card>
-            {METRICS.map((m, i) => (
-              <QuickLogRow
-                key={m.type}
-                spec={m}
-                todayValue={
-                  todayLogs.find((l) => l.type === m.type)?.value
-                }
-                isFirst={i === 0}
-              />
-            ))}
+            <QuickLogRow
+              spec={WEIGHT_SPEC}
+              todayValue={todayLogs.find((l) => l.type === "weight")?.value}
+              isFirst
+            />
+            <TappableMetricRow
+              spec={SLEEP_SPEC}
+              todayValue={todayLogs.find((l) => l.type === "sleep")?.value}
+              onTap={() => onOpenMetric("sleep")}
+            />
+            <TappableMetricRow
+              spec={WATER_SPEC}
+              todayValue={todayLogs.find((l) => l.type === "water")?.value}
+              onTap={() => onOpenMetric("water")}
+            />
           </Card>
         </Section>
 
-        <Section title="Last 14 days">
+        <Section title="Weight">
           <div className="space-y-3">
-            {METRICS.map((m) => (
-              <TrendCard
-                key={m.type}
-                spec={m}
-                logs={recentLogs.filter(
-                  (l) => l.type === m.type && l.date >= fourteenDaysAgo,
-                )}
-              />
-            ))}
+            <WeightHeatmap logs={weightLogs} />
+            <TrendCard spec={WEIGHT_SPEC} logs={weightLogsTrend} />
           </div>
         </Section>
 
-        <Section title="Recent entries">
-          <Card>
-            {recentLogs.length === 0 ? (
-              <div className="px-3.5 py-4 text-sm text-muted">
-                No entries yet — log something above.
-              </div>
-            ) : (
-              [...recentLogs]
-                .sort((a, b) => b.date - a.date || b.createdAt - a.createdAt)
-                .slice(0, 12)
-                .map((l) => <EntryRow key={l.id} log={l} />)
-            )}
-          </Card>
+        <Section title="Sleep">
+          <TrendCard spec={SLEEP_SPEC} logs={sleepLogs14} />
+        </Section>
+
+        <Section title="Water">
+          <TrendCard spec={WATER_SPEC} logs={waterLogs14} />
         </Section>
       </div>
     </div>
@@ -153,7 +178,7 @@ function QuickLogRow({
           date: today,
           type: spec.type,
           value: v,
-          unit: spec.unit === "/10" ? undefined : spec.unit,
+          unit: spec.unit,
           createdAt: Date.now(),
         });
       }
@@ -211,6 +236,74 @@ function QuickLogRow({
   );
 }
 
+// Row that mirrors the Today screen's stat tile: label, value/goal, progress
+// bar, and a chevron. Tapping it opens the shared MetricSheet for that metric
+// so editing happens in one place across Today and Health.
+function TappableMetricRow({
+  spec,
+  todayValue,
+  onTap,
+}: {
+  spec: MetricSpec;
+  todayValue: number | undefined;
+  onTap: () => void;
+}) {
+  const goal =
+    useLiveQuery(() => getGoal(spec.type as DailyMetricType), [spec.type]) ??
+    0;
+  const streak =
+    useLiveQuery(
+      () => computeStreak(spec.type as DailyMetricType),
+      [spec.type],
+    ) ?? 0;
+  const value = todayValue ?? 0;
+  const pct = goal > 0 ? Math.min(100, (value / goal) * 100) : 0;
+
+  return (
+    <button
+      onClick={onTap}
+      className="flex w-full items-center gap-3 border-t border-border px-3.5 py-3 text-left hover:bg-surface-2 active:scale-[0.995]"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="flex items-baseline gap-2">
+            <div className="text-base leading-tight text-fg">{spec.label}</div>
+            {streak > 0 && (
+              <span
+                className={`font-mono text-[10px] ${
+                  streak >= 7 ? "text-accent-fg" : "text-muted"
+                }`}
+              >
+                {streak}d
+              </span>
+            )}
+          </div>
+          <div className="font-mono text-xs">
+            <span className="text-fg">
+              {todayValue !== undefined ? spec.format(value) : "—"}
+              {spec.unit}
+            </span>
+            {goal > 0 && (
+              <span className="text-subtle">
+                {" "}
+                / {spec.format(goal)}
+                {spec.unit}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="mt-2 h-1 overflow-hidden rounded-[1px] bg-surface-2">
+          <span
+            className="block h-full bg-accent transition-[width]"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+      <span className="text-subtle">›</span>
+    </button>
+  );
+}
+
 function TrendCard({
   spec,
   logs,
@@ -247,10 +340,13 @@ function TrendCard({
           })
           .join(" ");
 
+  // Color the delta: weight likes going down; sleep & water like going up.
+  const deltaIsGood = spec.type === "weight" ? delta < 0 : delta > 0;
+
   return (
     <div className="rounded-[16px] border border-border bg-surface px-3.5 py-3">
       <div className="flex items-baseline justify-between">
-        <div className="text-sm font-medium text-fg">{spec.label}</div>
+        <div className="text-sm font-medium text-fg">{spec.label} trend</div>
         {latest !== undefined && (
           <div className="font-mono text-xs">
             <span className="text-fg">
@@ -262,13 +358,13 @@ function TrendCard({
                 className={`ml-2 ${
                   delta === 0
                     ? "text-muted"
-                    : (spec.type === "weight" ? delta < 0 : delta > 0)
-                    ? "text-accent-fg"
-                    : "text-subtle"
+                    : deltaIsGood
+                      ? "text-accent-fg"
+                      : "text-subtle"
                 }`}
               >
-                {delta > 0 ? "+" : ""}
-                {spec.type === "weight" ? delta.toFixed(1) : Math.round(delta)}
+                {delta > 0 ? "+" : delta < 0 ? "-" : ""}
+                {spec.format(Math.abs(delta))}
               </span>
             )}
           </div>
@@ -322,52 +418,3 @@ function TrendCard({
     </div>
   );
 }
-
-function EntryRow({ log }: { log: HealthLog }) {
-  const dateStr = new Date(log.date).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-  const onDelete = async () => {
-    if (confirm(`Delete this ${log.type} entry?`)) {
-      await db.health_logs.delete(log.id!);
-    }
-  };
-  return (
-    <div className="flex items-center gap-3 border-t border-border px-3.5 py-2.5 first:border-t-0">
-      <div className="min-w-0 flex-1">
-        <div className="text-sm leading-tight text-fg">
-          {log.type}
-          <span className="ml-2 font-mono text-xs text-muted">{dateStr}</span>
-        </div>
-        {log.notes && (
-          <div className="mt-0.5 font-mono text-[11px] text-muted">
-            {log.notes}
-          </div>
-        )}
-      </div>
-      <div className="font-mono text-sm text-fg">
-        {log.value}
-        <span className="ml-0.5 text-xs text-muted">{log.unit ?? ""}</span>
-      </div>
-      <button
-        onClick={onDelete}
-        aria-label="Delete entry"
-        className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-[8px] text-subtle opacity-50 hover:bg-surface-2 hover:text-fg hover:opacity-100"
-      >
-        <XIcon />
-      </button>
-    </div>
-  );
-}
-
-const XIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-    <path
-      d="M2 2l7 7M9 2l-7 7"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-  </svg>
-);

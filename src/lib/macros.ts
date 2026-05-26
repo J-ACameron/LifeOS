@@ -98,3 +98,12 @@ export async function addFood(food: NewFood): Promise<Food> {
 export async function deleteFood(id: number): Promise<void> {
   await db.foods.delete(id)
 }
+
+// Look up a food in the library by barcode (UPC / EAN). Used when scanning:
+// if the user has already saved this product, skip the OFF API + new-food
+// form and go straight to picking servings.
+export async function findFoodByBarcode(
+  barcode: string,
+): Promise<Food | undefined> {
+  return db.foods.where('barcode').equals(barcode).first()
+}

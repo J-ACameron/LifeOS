@@ -14,6 +14,13 @@ import {
 } from "../lib/health";
 import WeeklyReviewSheet from "../components/WeeklyReviewSheet";
 import { OPEN_BACKUP_EVENT } from "../App";
+import {
+  disableNotifications,
+  enableNotifications,
+  getNotificationState,
+  isPushSupported,
+  type NotificationState,
+} from "../lib/notifications";
 
 interface HomeProps {
   onOpenMetric: (type: DailyMetricType) => void;
@@ -331,25 +338,28 @@ export default function Home({ onOpenMetric }: HomeProps) {
 
         {/* Settings */}
         <Section title="Settings">
-          <button
-            onClick={() =>
-              document.dispatchEvent(new Event(OPEN_BACKUP_EVENT))
-            }
-            className="flex w-full items-center gap-3 rounded-[16px] border border-border bg-surface px-3.5 py-3 text-left hover:border-border-strong active:scale-[0.99]"
-          >
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-surface-2 text-subtle">
-              <BackupIcon />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-base leading-tight text-fg">
-                Backup & restore
+          <div className="space-y-2">
+            <NotificationsRow />
+            <button
+              onClick={() =>
+                document.dispatchEvent(new Event(OPEN_BACKUP_EVENT))
+              }
+              className="flex w-full items-center gap-3 rounded-[16px] border border-border bg-surface px-3.5 py-3 text-left hover:border-border-strong active:scale-[0.99]"
+            >
+              <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-surface-2 text-subtle">
+                <BackupIcon />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-base leading-tight text-fg">
+                  Backup & restore
+                </div>
+                <div className="mt-0.5 font-mono text-[11px] text-muted">
+                  Export all data as JSON or import from a backup
+                </div>
               </div>
-              <div className="mt-0.5 font-mono text-[11px] text-muted">
-                Export all data as JSON or import from a backup
-              </div>
-            </div>
-            <span className="text-subtle">›</span>
-          </button>
+              <span className="text-subtle">›</span>
+            </button>
+          </div>
         </Section>
 
         <div className="py-3 text-center font-mono text-[11px] tracking-[0.04em] text-subtle">
@@ -457,6 +467,125 @@ function BackupIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+function BellIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M4 7a4 4 0 0 1 8 0v3l1 2H3l1-2V7Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.5 13a1.5 1.5 0 0 0 3 0"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function NotificationsRow() {
+  const [state, setState] = useState<NotificationState>({
+    kind: isPushSupported() ? "needs-permission" : "unsupported",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Refresh state when this row mounts (and after each enable/disable).
+  const refresh = async () => {
+    try {
+      setState(await getNotificationState());
+    } catch {
+      // ignore — state stays as-is
+    }
+  };
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const onTap = async () => {
+    if (busy) return;
+    setError(null);
+    if (state.kind === "unsupported") {
+      setError("This browser doesn't support push notifications.");
+      return;
+    }
+    if (state.kind === "denied") {
+      setError(
+        "Notifications were blocked. Enable them in your device's site settings.",
+      );
+      return;
+    }
+    setBusy(true);
+    try {
+      if (state.kind === "subscribed") {
+        if (
+          !confirm(
+            "Turn off LifeOS notifications? You'll stop getting the daily habit reminder.",
+          )
+        ) {
+          setBusy(false);
+          return;
+        }
+        await disableNotifications();
+      } else {
+        await enableNotifications();
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sub =
+    state.kind === "subscribed"
+      ? "On · habits 9:30 ET · weight + sleep 9:40 ET"
+      : state.kind === "denied"
+        ? "Blocked — change in device site settings"
+        : state.kind === "unsupported"
+          ? "Not supported on this browser"
+          : state.kind === "needs-permission"
+            ? "Off · tap to enable push reminders"
+            : "Off · tap to enable";
+
+  return (
+    <div>
+      <button
+        onClick={onTap}
+        disabled={busy}
+        className="flex w-full items-center gap-3 rounded-[16px] border border-border bg-surface px-3.5 py-3 text-left hover:border-border-strong active:scale-[0.99] disabled:opacity-60"
+      >
+        <span
+          className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-full ${
+            state.kind === "subscribed"
+              ? "bg-accent-soft text-accent-fg"
+              : "bg-surface-2 text-subtle"
+          }`}
+        >
+          <BellIcon />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-base leading-tight text-fg">Notifications</div>
+          <div className="mt-0.5 font-mono text-[11px] text-muted">
+            {busy ? "…" : sub}
+          </div>
+        </div>
+        <span className="text-subtle">
+          {state.kind === "subscribed" ? "On" : "›"}
+        </span>
+      </button>
+      {error && (
+        <div className="mt-1 px-3.5 font-mono text-[11px] text-muted">
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
 

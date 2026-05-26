@@ -5,20 +5,37 @@ import type { Food } from "../db/types";
 import {
   addFood,
   addMealEntry,
+  findFoodByBarcode,
   MEAL_LABELS,
   scaleMacros,
   type MealType,
   type NewFood,
 } from "../lib/macros";
+import { lookupBarcode } from "../lib/openFoodFacts";
+import BarcodeScannerSheet from "./BarcodeScannerSheet";
+
+interface NewFoodDraft {
+  name?: string;
+  brand?: string;
+  servingSize?: string;
+  calories?: string;
+  protein?: string;
+  carbs?: string;
+  fat?: string;
+  barcode?: string;
+}
 
 type View = "list" | "new" | "servings";
 
 interface Props {
   meal: MealType | null;
   onClose: () => void;
+  // Optional — date the logged entry should belong to. Defaults to today
+  // (addMealEntry's own default).
+  date?: number;
 }
 
-export default function FoodPickerSheet({ meal, onClose }: Props) {
+export default function FoodPickerSheet({ meal, onClose, date }: Props) {
   const open = meal !== null;
   const [renderMeal, setRenderMeal] = useState<MealType | null>(meal);
   useEffect(() => { if (meal !== null) setRenderMeal(meal); }, [meal]);
@@ -26,6 +43,9 @@ export default function FoodPickerSheet({ meal, onClose }: Props) {
   const [view, setView] = useState<View>("list");
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<Food | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [newFoodDraft, setNewFoodDraft] = useState<NewFoodDraft>({});
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
 
   // Reset internal state when sheet opens.
   useEffect(() => {
@@ -33,8 +53,64 @@ export default function FoodPickerSheet({ meal, onClose }: Props) {
       setView("list");
       setQuery("");
       setPicked(null);
+      setScannerOpen(false);
+      setNewFoodDraft({});
+      setScanStatus(null);
     }
   }, [open, renderMeal]);
+
+  const onBarcodeDetected = async (barcode: string) => {
+    setScannerOpen(false);
+    setScanStatus("Looking up barcode…");
+
+    // 1. Check the user's library first — fastest path, no network needed.
+    const existing = await findFoodByBarcode(barcode);
+    if (existing) {
+      setScanStatus(null);
+      setPicked(existing);
+      setView("servings");
+      return;
+    }
+
+    // 2. Fall through to Open Food Facts.
+    const result = await lookupBarcode(barcode);
+    setScanStatus(null);
+    if (result.kind === "found") {
+      const p = result.product;
+      setNewFoodDraft({
+        name: p.name,
+        brand: p.brand ?? "",
+        servingSize: p.servingSize,
+        calories: String(p.macros.calories),
+        protein: String(p.macros.protein),
+        carbs: String(p.macros.carbs),
+        fat: String(p.macros.fat),
+        barcode,
+      });
+      setView("new");
+      return;
+    }
+    if (result.kind === "no-macros") {
+      setNewFoodDraft({ barcode });
+      setScanStatus(
+        "Product found but no macros listed — fill them in manually.",
+      );
+      setView("new");
+      return;
+    }
+    if (result.kind === "error") {
+      setNewFoodDraft({ barcode });
+      setScanStatus(`Lookup failed: ${result.message}. Enter manually.`);
+      setView("new");
+      return;
+    }
+    // not-found
+    setNewFoodDraft({ barcode });
+    setScanStatus(
+      "Barcode not in Open Food Facts — fill in the macros yourself.",
+    );
+    setView("new");
+  };
 
   const allFoods = useLiveQuery(
     () => db.foods.orderBy("name").toArray(),
@@ -118,6 +194,12 @@ export default function FoodPickerSheet({ meal, onClose }: Props) {
         )}
 
         <div className="flex-1 overflow-y-auto px-[18px] pb-6 [&::-webkit-scrollbar]:hidden">
+          {scanStatus && (
+            <div className="mb-3 rounded-[10px] border border-border bg-surface px-3 py-2 text-xs text-muted">
+              {scanStatus}
+            </div>
+          )}
+
           {view === "list" && (
             <ListView
               query={query}
@@ -126,7 +208,15 @@ export default function FoodPickerSheet({ meal, onClose }: Props) {
               all={filtered}
               showRecent={!query.trim()}
               onPick={onPick}
-              onNewFood={() => setView("new")}
+              onNewFood={() => {
+                setNewFoodDraft({});
+                setScanStatus(null);
+                setView("new");
+              }}
+              onScan={() => {
+                setScanStatus(null);
+                setScannerOpen(true);
+              }}
               onDeleteFood={(id) => db.foods.delete(id)}
             />
           )}
@@ -134,9 +224,11 @@ export default function FoodPickerSheet({ meal, onClose }: Props) {
           {view === "new" && (
             <NewFoodForm
               initialName={query}
+              initialDraft={newFoodDraft}
               onSave={async (food) => {
                 const created = await addFood(food);
                 setPicked(created);
+                setNewFoodDraft({});
                 setView("servings");
               }}
             />
@@ -146,13 +238,19 @@ export default function FoodPickerSheet({ meal, onClose }: Props) {
             <ServingsForm
               food={picked}
               onConfirm={async (servings) => {
-                await addMealEntry(renderMeal, picked, servings);
+                await addMealEntry(renderMeal, picked, servings, date);
                 onClose();
               }}
             />
           )}
         </div>
       </div>
+
+      <BarcodeScannerSheet
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetected={onBarcodeDetected}
+      />
     </>
   );
 }
@@ -160,7 +258,7 @@ export default function FoodPickerSheet({ meal, onClose }: Props) {
 /* -------------------- List view -------------------- */
 
 function ListView({
-  query, setQuery, recent, all, showRecent, onPick, onNewFood, onDeleteFood,
+  query, setQuery, recent, all, showRecent, onPick, onNewFood, onScan, onDeleteFood,
 }: {
   query: string;
   setQuery: (s: string) => void;
@@ -169,6 +267,7 @@ function ListView({
   showRecent: boolean;
   onPick: (f: Food) => void;
   onNewFood: () => void;
+  onScan: () => void;
   onDeleteFood: (id: number) => void;
 }) {
   return (
@@ -182,6 +281,13 @@ function ListView({
             className="w-full bg-transparent outline-none placeholder:text-subtle"
           />
         </div>
+        <button
+          onClick={onScan}
+          className="grid h-10 w-10 place-items-center rounded-[10px] border border-border bg-surface text-fg hover:border-border-strong"
+          aria-label="Scan barcode"
+        >
+          <BarcodeIcon />
+        </button>
         <button
           onClick={onNewFood}
           className="grid h-10 w-10 place-items-center rounded-[10px] bg-accent text-[#0a160d]"
@@ -269,15 +375,21 @@ function FoodRow({
 /* -------------------- New-food form -------------------- */
 
 function NewFoodForm({
-  initialName, onSave,
-}: { initialName: string; onSave: (food: NewFood) => void }) {
-  const [name, setName] = useState(initialName);
-  const [brand, setBrand] = useState("");
-  const [servingSize, setServingSize] = useState("1 serving");
-  const [calories, setCalories] = useState("");
-  const [protein, setProtein] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fat, setFat] = useState("");
+  initialName, initialDraft, onSave,
+}: {
+  initialName: string;
+  initialDraft: NewFoodDraft;
+  onSave: (food: NewFood) => void;
+}) {
+  const [name, setName] = useState(initialDraft.name ?? initialName);
+  const [brand, setBrand] = useState(initialDraft.brand ?? "");
+  const [servingSize, setServingSize] = useState(
+    initialDraft.servingSize ?? "1 serving",
+  );
+  const [calories, setCalories] = useState(initialDraft.calories ?? "");
+  const [protein, setProtein] = useState(initialDraft.protein ?? "");
+  const [carbs, setCarbs] = useState(initialDraft.carbs ?? "");
+  const [fat, setFat] = useState(initialDraft.fat ?? "");
 
   const valid = name.trim().length > 0 && servingSize.trim().length > 0;
 
@@ -294,6 +406,7 @@ function NewFoodForm({
         carbs: parseNum(carbs),
         fat: parseNum(fat),
       },
+      ...(initialDraft.barcode ? { barcode: initialDraft.barcode } : {}),
     });
   };
 
@@ -387,7 +500,7 @@ function ServingsForm({
         <input
           type="number"
           inputMode="decimal"
-          step="0.25"
+          step="any"
           min="0"
           value={servings}
           autoFocus
@@ -445,5 +558,15 @@ const PlusIcon = () => (
 const XIcon = () => (
   <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
     <path d="M2 2l7 7M9 2l-7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+const BarcodeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path
+      d="M2 3v10M4 3v10M5.5 3v10M7 3v10M9 3v10M10.5 3v10M12 3v10M14 3v10"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+    />
   </svg>
 );

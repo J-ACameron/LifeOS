@@ -19,10 +19,25 @@ import {
 
 export default function Macros() {
   const today = startOfToday();
+  const [selectedDay, setSelectedDay] = useState<number>(today);
+  const isToday = selectedDay === today;
+
+  const adjustDay = (delta: number) => (d: number) => {
+    const dt = new Date(d);
+    dt.setDate(dt.getDate() + delta);
+    dt.setHours(0, 0, 0, 0);
+    return dt.getTime();
+  };
+  const goToPrevDay = () => setSelectedDay(adjustDay(-1));
+  const goToNextDay = () => {
+    if (selectedDay >= today) return;
+    setSelectedDay(adjustDay(1));
+  };
+
   const entries =
     useLiveQuery(
-      () => db.meal_entries.where("date").equals(today).toArray(),
-      [today],
+      () => db.meal_entries.where("date").equals(selectedDay).toArray(),
+      [selectedDay],
     ) ?? [];
 
   const goals =
@@ -63,6 +78,26 @@ export default function Macros() {
               className="text-subtle hover:text-fg"
             >
               {editGoals ? "done" : "edit goals"}
+            </button>
+          </div>
+          <div className="mt-3 flex items-center justify-between">
+            <button
+              onClick={goToPrevDay}
+              aria-label="Previous day"
+              className="grid h-8 w-8 place-items-center rounded-[8px] text-subtle hover:bg-surface-2 hover:text-fg"
+            >
+              ‹
+            </button>
+            <div className="font-mono text-sm text-fg">
+              {formatDateNumeric(selectedDay)}
+            </div>
+            <button
+              onClick={goToNextDay}
+              disabled={isToday}
+              aria-label="Next day"
+              className="grid h-8 w-8 place-items-center rounded-[8px] text-subtle hover:bg-surface-2 hover:text-fg disabled:opacity-30"
+            >
+              ›
             </button>
           </div>
         </header>
@@ -157,10 +192,28 @@ export default function Macros() {
 
       <FoodPickerSheet
         meal={pickerMeal}
+        date={selectedDay}
         onClose={() => setPickerMeal(null)}
       />
     </div>
   );
+}
+
+// Numeric date: "5/8" when this year, "5/8/2025" otherwise.
+function formatDateNumeric(ts: number): string {
+  const d = new Date(ts);
+  const nowYear = new Date().getFullYear();
+  if (d.getFullYear() === nowYear) {
+    return d.toLocaleDateString(undefined, {
+      month: "numeric",
+      day: "numeric",
+    });
+  }
+  return d.toLocaleDateString(undefined, {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /* -------------------- Sub-components -------------------- */

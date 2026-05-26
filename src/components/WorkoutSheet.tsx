@@ -15,6 +15,7 @@ import {
   finishWorkout,
   formatDuration,
   formatRestTime,
+  formatTarget,
   isSetCompleted,
   removeExerciseFromWorkout,
   removeSet,
@@ -26,6 +27,7 @@ import {
   workoutToCoachPrompt,
 } from "../lib/fitness";
 import { generateText } from "../lib/anthropic";
+import { fireLocalNotification } from "../lib/notifications";
 import ExercisePickerSheet from "./ExercisePickerSheet";
 import ExerciseHistorySheet from "./ExerciseHistorySheet";
 
@@ -99,6 +101,7 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
         if (typeof navigator !== "undefined" && "vibrate" in navigator) {
           try { navigator.vibrate?.(200); } catch { /* noop */ }
         }
+        fireLocalNotification("Rest done", "Ready for your next set.");
       } else {
         setTickNow(Date.now());
       }
@@ -125,9 +128,28 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
     if (isSetCompleted(set)) {
       await updateSet(id, exerciseIndex, setIndex, { completedAt: undefined });
     } else {
-      await updateSet(id, exerciseIndex, setIndex, { completedAt: Date.now() });
-      // Auto-start rest timer
-      setRestEndsAt(Date.now() + DEFAULT_REST_SEC * 1000);
+      const completedAt = Date.now();
+      await updateSet(id, exerciseIndex, setIndex, { completedAt });
+      // Auto-start rest timer — honor the set's prescribed rest if it has one.
+      const restSec = set.restSec ?? DEFAULT_REST_SEC;
+      setRestEndsAt(Date.now() + restSec * 1000);
+
+      // PR notification — if this set's e1RM beats every prior set of this
+      // exercise, surface it as a notification (helpful on the lock screen
+      // mid-workout).
+      const ex = workout?.exercises[exerciseIndex];
+      const exId = ex?.exerciseId;
+      if (exId !== undefined) {
+        const completedSet = { ...set, completedAt };
+        const newE1RM = e1RM(completedSet);
+        const priorBest = priorBestByExerciseId.get(exId) ?? 0;
+        if (newE1RM > 0 && newE1RM > priorBest) {
+          fireLocalNotification(
+            "PR set",
+            `${ex.exerciseName}: ${set.reps}×${Math.round(set.weight)} lb`,
+          );
+        }
+      }
     }
   };
 
@@ -492,6 +514,20 @@ function ExerciseBlock({
           <XIcon />
         </button>
       </div>
+
+      {/* Target prescription + form notes (from a template) */}
+      {(formatTarget(exercise) || exercise.notes) && (
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border px-3.5 py-1.5">
+          {formatTarget(exercise) && (
+            <span className="font-mono text-[11px] text-accent-fg">
+              Target {formatTarget(exercise)}
+            </span>
+          )}
+          {exercise.notes && (
+            <span className="text-[11px] text-muted">{exercise.notes}</span>
+          )}
+        </div>
+      )}
 
       {/* Sets table header */}
       <div className="grid grid-cols-[28px_60px_1fr_1fr_50px_36px] items-center gap-1 border-b border-border px-3 py-1.5 text-[10px] uppercase tracking-[0.06em] text-muted">

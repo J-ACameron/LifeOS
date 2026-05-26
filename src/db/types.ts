@@ -44,6 +44,11 @@ export interface WorkoutExercise {
   exerciseName: string
   sets: WorkoutSet[]
   notes?: string
+  // Optional target prescription, copied from a template at run time so the
+  // user sees what they're aiming for while logging.
+  targetSets?: number
+  repLow?: number
+  repHigh?: number
 }
 
 export interface Workout {
@@ -82,17 +87,44 @@ export interface Exercise {
   useCount: number
 }
 
-// A reusable workout template — just a name + the list of exercises that
-// belong to it. No sets/reps/weights baked in; those are filled in at run
-// time.
+// One exercise inside a template. Carries an optional target prescription
+// (sets, rep range, rest, form notes). All target fields are optional —
+// templates created by hand may have none, imported programs fill them in.
+export interface WorkoutTemplateExercise {
+  exerciseId: number
+  exerciseName: string
+  targetSets?: number
+  repLow?: number
+  repHigh?: number
+  restSec?: number
+  notes?: string
+}
+
+// A reusable workout template — a name + the list of exercises that belong to
+// it. Target sets/reps/rest are optional per exercise; actual weights are
+// always filled in at run time.
 export interface WorkoutTemplate {
   id?: number
   name: string
-  exercises: { exerciseId: number; exerciseName: string }[]
+  exercises: WorkoutTemplateExercise[]
   notes?: string
   createdAt: number
   lastUsedAt?: number
   useCount: number
+}
+
+// A logged cardio session — kept separate from strength workouts since it
+// doesn't fit the sets/reps/weight model.
+export type CardioKind = 'liss' | 'hiit'
+
+export interface CardioSession {
+  id?: number
+  date: number
+  kind: CardioKind
+  durationMin: number
+  modality?: string // free-text: "incline walk", "bike", "rower", "stairmaster"
+  notes?: string
+  createdAt: number
 }
 
 export interface Macros {
@@ -122,6 +154,10 @@ export interface Food {
   servingGrams?: number // optional gram-equivalent for normalization
   macros: Macros // macros for ONE serving
   notes?: string
+  // UPC / EAN barcode if the food was scanned or imported from a barcode
+  // lookup. Indexed in Dexie so future scans hit the library directly
+  // instead of creating duplicates.
+  barcode?: string
   createdAt: number
   lastUsedAt?: number
   useCount: number
@@ -230,4 +266,13 @@ export interface CalendarEvent {
   end: string
   location?: string
   description?: string
+}
+
+// Freeform notes — simple title + body, auto-saved as you type.
+export interface Note {
+  id?: number
+  title: string
+  body: string
+  createdAt: number
+  updatedAt: number
 }

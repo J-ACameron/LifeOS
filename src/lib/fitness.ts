@@ -284,6 +284,22 @@ export function formatRestTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+// Render a target prescription like "4 × 5-7" or "3 × 12". Returns "" when
+// no target is set (hand-made templates / workouts without a prescription).
+export function formatTarget(ex: {
+  targetSets?: number
+  repLow?: number
+  repHigh?: number
+}): string {
+  if (!ex.targetSets) return ''
+  if (ex.repLow === undefined) return `${ex.targetSets} sets`
+  const reps =
+    ex.repHigh === undefined || ex.repHigh === ex.repLow
+      ? `${ex.repLow}`
+      : `${ex.repLow}-${ex.repHigh}`
+  return `${ex.targetSets} × ${reps}`
+}
+
 /* -------------------- PRs (e1RM-based) -------------------- */
 
 // Epley formula: estimated 1-rep max = weight × (1 + reps/30).
@@ -502,11 +518,24 @@ export async function runTemplate(id: number): Promise<number> {
   const workoutId = await db.workouts.add({
     date: now,
     name: template.name,
-    exercises: template.exercises.map((ex) => ({
-      exerciseId: ex.exerciseId,
-      exerciseName: ex.exerciseName,
-      sets: [{ reps: 0, weight: 0 }],
-    })),
+    exercises: template.exercises.map((ex) => {
+      const setCount =
+        ex.targetSets && ex.targetSets > 0 ? ex.targetSets : 1
+      const sets: WorkoutSet[] = Array.from({ length: setCount }, () => ({
+        reps: 0,
+        weight: 0,
+        ...(ex.restSec ? { restSec: ex.restSec } : {}),
+      }))
+      return {
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        sets,
+        ...(ex.targetSets ? { targetSets: ex.targetSets } : {}),
+        ...(ex.repLow !== undefined ? { repLow: ex.repLow } : {}),
+        ...(ex.repHigh !== undefined ? { repHigh: ex.repHigh } : {}),
+        ...(ex.notes ? { notes: ex.notes } : {}),
+      }
+    }),
     startedAt: now,
     createdAt: now,
   })

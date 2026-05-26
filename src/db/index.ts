@@ -15,6 +15,8 @@ import type {
   GoalJournalEntry,
   Exercise,
   WorkoutTemplate,
+  CardioSession,
+  Note,
 } from './types'
 
 class LifeOSDB extends Dexie {
@@ -33,6 +35,8 @@ class LifeOSDB extends Dexie {
   goal_journal!: Table<GoalJournalEntry, number>
   exercises!: Table<Exercise, number>
   workout_templates!: Table<WorkoutTemplate, number>
+  cardio_sessions!: Table<CardioSession, number>
+  notes!: Table<Note, number>
 
   constructor() {
     super('LifeOS')
@@ -128,6 +132,74 @@ class LifeOSDB extends Dexie {
       exercises: '++id, name, isCustom, lastUsedAt, useCount, createdAt',
       // new — saved workout templates
       workout_templates: '++id, name, lastUsedAt, useCount, createdAt',
+    })
+
+    this.version(6).stores({
+      settings: '&key, updatedAt',
+      tasks:
+        '++id, status, dueDate, priority, source, calendarEventId, emailId, goalId, createdAt, *tags',
+      workouts: '++id, date, completedAt, createdAt',
+      meals: '++id, date, type, [date+type], createdAt',
+      transactions: '++id, date, category, source, emailId, createdAt',
+      habits: '++id, name, archived, lastCompleted, createdAt',
+      goals: '++id, status, term, targetDate, createdAt',
+      health_logs: '++id, date, type, [date+type], createdAt',
+      chat_history:
+        '++id, conversationId, [conversationId+createdAt], createdAt',
+      cached_briefs: '++id, type, date, [type+date], createdAt',
+      foods: '++id, name, lastUsedAt, useCount, createdAt',
+      meal_entries: '++id, date, type, foodId, [date+type], createdAt',
+      goal_journal: '++id, goalId, [goalId+createdAt], createdAt',
+      exercises: '++id, name, isCustom, lastUsedAt, useCount, createdAt',
+      workout_templates: '++id, name, lastUsedAt, useCount, createdAt',
+      // new — logged cardio sessions (LISS / HIIT)
+      cardio_sessions: '++id, date, kind, createdAt',
+    })
+
+    this.version(7).stores({
+      settings: '&key, updatedAt',
+      tasks:
+        '++id, status, dueDate, priority, source, calendarEventId, emailId, goalId, createdAt, *tags',
+      workouts: '++id, date, completedAt, createdAt',
+      meals: '++id, date, type, [date+type], createdAt',
+      transactions: '++id, date, category, source, emailId, createdAt',
+      habits: '++id, name, archived, lastCompleted, createdAt',
+      goals: '++id, status, term, targetDate, createdAt',
+      health_logs: '++id, date, type, [date+type], createdAt',
+      chat_history:
+        '++id, conversationId, [conversationId+createdAt], createdAt',
+      cached_briefs: '++id, type, date, [type+date], createdAt',
+      foods: '++id, name, lastUsedAt, useCount, createdAt',
+      meal_entries: '++id, date, type, foodId, [date+type], createdAt',
+      goal_journal: '++id, goalId, [goalId+createdAt], createdAt',
+      exercises: '++id, name, isCustom, lastUsedAt, useCount, createdAt',
+      workout_templates: '++id, name, lastUsedAt, useCount, createdAt',
+      cardio_sessions: '++id, date, kind, createdAt',
+      // new — freeform notes (title + body, auto-saved)
+      notes: '++id, updatedAt, createdAt',
+    })
+
+    this.version(8).stores({
+      settings: '&key, updatedAt',
+      tasks:
+        '++id, status, dueDate, priority, source, calendarEventId, emailId, goalId, createdAt, *tags',
+      workouts: '++id, date, completedAt, createdAt',
+      meals: '++id, date, type, [date+type], createdAt',
+      transactions: '++id, date, category, source, emailId, createdAt',
+      habits: '++id, name, archived, lastCompleted, createdAt',
+      goals: '++id, status, term, targetDate, createdAt',
+      health_logs: '++id, date, type, [date+type], createdAt',
+      chat_history:
+        '++id, conversationId, [conversationId+createdAt], createdAt',
+      cached_briefs: '++id, type, date, [type+date], createdAt',
+      // foods: + barcode index so future barcode scans hit the library directly
+      foods: '++id, name, barcode, lastUsedAt, useCount, createdAt',
+      meal_entries: '++id, date, type, foodId, [date+type], createdAt',
+      goal_journal: '++id, goalId, [goalId+createdAt], createdAt',
+      exercises: '++id, name, isCustom, lastUsedAt, useCount, createdAt',
+      workout_templates: '++id, name, lastUsedAt, useCount, createdAt',
+      cardio_sessions: '++id, date, kind, createdAt',
+      notes: '++id, updatedAt, createdAt',
     })
   }
 }

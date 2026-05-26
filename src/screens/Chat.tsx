@@ -104,12 +104,21 @@ export default function Chat({ open, onClose, coachKey }: Props) {
       .equals(conversationId)
       .sortBy("createdAt");
 
-    const apiMessages: ApiMessage[] = history
+    // Sliding window: only send the most recent 60 turns to the API. Keeps
+    // chats fast on long-running threads (Sebastian) while the full history
+    // stays in IndexedDB for the user to scroll back through.
+    let apiMessages: ApiMessage[] = history
       .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(-60)
       .map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       }));
+    // Anthropic requires the first message to be a user turn — drop any
+    // leading assistant turn that slipped in from the slice.
+    while (apiMessages.length > 0 && apiMessages[0].role !== "user") {
+      apiMessages = apiMessages.slice(1);
+    }
 
     let systemPrompt: string;
     try {
@@ -153,6 +162,24 @@ export default function Chat({ open, onClose, coachKey }: Props) {
 
   const canSend = !!draft.trim() && !thinking && streaming === null;
 
+  const clearConversation = async () => {
+    if (thinking || streaming !== null) return;
+    if (
+      !confirm(
+        `Clear conversation with ${coach.label}? This can't be undone.`,
+      )
+    ) {
+      return;
+    }
+    await db.chat_history
+      .where("conversationId")
+      .equals(conversationId)
+      .delete();
+    setStreaming(null);
+    setThinking(false);
+    setError(null);
+  };
+
   return (
     <>
       <div
@@ -168,11 +195,23 @@ export default function Chat({ open, onClose, coachKey }: Props) {
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-border-strong" />
-        <div className="flex items-center justify-between px-[18px] pb-2.5 pt-3.5">
-          <span className="text-sm font-medium uppercase tracking-[0.04em] text-muted">
+        <div className="flex items-center justify-between gap-2 px-[18px] pb-2.5 pt-3.5">
+          <button
+            onClick={clearConversation}
+            disabled={thinking || streaming !== null || messages.length === 0}
+            className="px-1.5 py-1 text-sm text-muted hover:text-fg disabled:opacity-30"
+          >
+            Clear
+          </button>
+          <span className="truncate text-sm font-medium uppercase tracking-[0.04em] text-muted">
             {coach.label}
           </span>
-          <button onClick={onClose} className="px-1.5 py-1 text-base text-accent-fg">Done</button>
+          <button
+            onClick={onClose}
+            className="px-1.5 py-1 text-base text-accent-fg"
+          >
+            Done
+          </button>
         </div>
 
         <div ref={bodyRef} className="flex flex-1 flex-col gap-3 overflow-y-auto px-[18px] py-2 [&::-webkit-scrollbar]:hidden">

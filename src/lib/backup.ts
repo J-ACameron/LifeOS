@@ -26,6 +26,11 @@ export interface Backup {
     cached_briefs: unknown[]
     foods: unknown[]
     meal_entries: unknown[]
+    cardio_sessions: unknown[]
+    exercises: unknown[]
+    notes: unknown[]
+    workout_templates: unknown[]
+    goal_journal: unknown[]
   }
 }
 
@@ -36,7 +41,8 @@ export async function exportAll(): Promise<Backup> {
   )
   const [
     tasks, workouts, meals, transactions, habits, goals,
-    healthLogs, chatHistory, cachedBriefs, foods, mealEntries,
+    healthLogs, chatHistory, cachedBriefs, foods, mealEntries, cardioSessions,
+    exercises, notes, workoutTemplates, goalJournal,
   ] = await Promise.all([
     db.tasks.toArray(),
     db.workouts.toArray(),
@@ -49,6 +55,11 @@ export async function exportAll(): Promise<Backup> {
     db.cached_briefs.toArray(),
     db.foods.toArray(),
     db.meal_entries.toArray(),
+    db.cardio_sessions.toArray(),
+    db.exercises.toArray(),
+    db.notes.toArray(),
+    db.workout_templates.toArray(),
+    db.goal_journal.toArray(),
   ])
 
   const data = {
@@ -64,6 +75,11 @@ export async function exportAll(): Promise<Backup> {
     cached_briefs: cachedBriefs,
     foods,
     meal_entries: mealEntries,
+    cardio_sessions: cardioSessions,
+    exercises,
+    notes,
+    workout_templates: workoutTemplates,
+    goal_journal: goalJournal,
   }
 
   const counts: Record<string, number> = {}
@@ -104,7 +120,8 @@ export async function importAll(rawJson: string): Promise<Backup['counts']> {
     [
       db.settings, db.tasks, db.workouts, db.meals, db.transactions,
       db.habits, db.goals, db.health_logs, db.chat_history,
-      db.cached_briefs, db.foods, db.meal_entries,
+      db.cached_briefs, db.foods, db.meal_entries, db.cardio_sessions,
+      db.exercises, db.notes, db.workout_templates, db.goal_journal,
     ],
     async () => {
       // Preserve sensitive settings — clear only non-sensitive ones.
@@ -128,6 +145,11 @@ export async function importAll(rawJson: string): Promise<Backup['counts']> {
         db.cached_briefs.clear(),
         db.foods.clear(),
         db.meal_entries.clear(),
+        db.cardio_sessions.clear(),
+        db.exercises.clear(),
+        db.notes.clear(),
+        db.workout_templates.clear(),
+        db.goal_journal.clear(),
       ])
 
       // Restore.
@@ -147,6 +169,11 @@ export async function importAll(rawJson: string): Promise<Backup['counts']> {
       await restore(db.cached_briefs, d.cached_briefs)
       await restore(db.foods, d.foods)
       await restore(db.meal_entries, d.meal_entries)
+      await restore(db.cardio_sessions, d.cardio_sessions)
+      await restore(db.exercises, d.exercises)
+      await restore(db.notes, d.notes)
+      await restore(db.workout_templates, d.workout_templates)
+      await restore(db.goal_journal, d.goal_journal)
     },
   )
 
