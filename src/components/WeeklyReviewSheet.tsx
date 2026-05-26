@@ -13,11 +13,22 @@ import {
 } from "../lib/weeklyReview";
 
 interface Props {
-  open: boolean;
   onClose: () => void;
 }
 
-export default function WeeklyReviewSheet({ open, onClose }: Props) {
+const TRANSITION_MS = 280;
+
+export default function WeeklyReviewSheet({ onClose }: Props) {
+  // Slide-in animation.
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
   const cached = useLiveQuery(() =>
     db.cached_briefs
       .where("type")
@@ -46,14 +57,6 @@ export default function WeeklyReviewSheet({ open, onClose }: Props) {
     setKeyDraft("");
     setError(null);
   };
-
-  useEffect(() => {
-    if (!open) {
-      setStreaming(null);
-      setThinking(false);
-      setError(null);
-    }
-  }, [open]);
 
   useEffect(() => {
     if (bodyRef.current) {
@@ -132,14 +135,14 @@ export default function WeeklyReviewSheet({ open, onClose }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[92%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
@@ -149,7 +152,7 @@ export default function WeeklyReviewSheet({ open, onClose }: Props) {
             Weekly review
           </span>
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Done

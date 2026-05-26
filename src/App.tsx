@@ -120,7 +120,7 @@ export default function App() {
 
 function TabBar({ value, onChange }: { value: Tab; onChange: (v: Tab) => void }) {
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 flex h-16 border-t border-border bg-bg">
+    <div className="absolute inset-x-0 bottom-0 z-30 flex h-16 border-t border-border bg-bg/95 backdrop-blur-xl">
       <TabButton
         active={value === "home"}
         onClick={() => onChange("home")}

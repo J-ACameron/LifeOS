@@ -365,10 +365,9 @@ export default function Home({ onOpenMetric, onOpenBackup }: HomeProps) {
         </div>
       </div>
 
-      <WeeklyReviewSheet
-        open={reviewOpen}
-        onClose={() => setReviewOpen(false)}
-      />
+      {reviewOpen && (
+        <WeeklyReviewSheet onClose={() => setReviewOpen(false)} />
+      )}
     </div>
   );
 }

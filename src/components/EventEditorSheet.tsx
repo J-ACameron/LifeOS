@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { createEvent } from "../lib/calendar";
 
 interface Props {
-  open: boolean;
+  // Parent mounts only when actually editing; no "closed" state inside.
   initialDate: Date;
   onClose: () => void;
   onCreated: () => void;
 }
+
+const TRANSITION_MS = 280;
 
 const RECURRENCE_OPTIONS: { label: string; value: string }[] = [
   { label: "Doesn't repeat", value: "" },
@@ -21,32 +23,29 @@ function ymd(d: Date): string {
 }
 
 export default function EventEditorSheet({
-  open, initialDate, onClose, onCreated,
+  initialDate, onClose, onCreated,
 }: Props) {
+  const dateStr = ymd(initialDate);
   const [title, setTitle] = useState("");
   const [allDay, setAllDay] = useState(false);
-  const [startDate, setStartDate] = useState("");
+  const [startDate, setStartDate] = useState(dateStr);
   const [startTime, setStartTime] = useState("09:00");
-  const [endDate, setEndDate] = useState("");
+  const [endDate, setEndDate] = useState(dateStr);
   const [endTime, setEndTime] = useState("10:00");
   const [recurrence, setRecurrence] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Reset / prefill form whenever the sheet opens.
+  // Slide-in animation on mount.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (!open) return;
-    const dateStr = ymd(initialDate);
-    setTitle("");
-    setAllDay(false);
-    setStartDate(dateStr);
-    setEndDate(dateStr);
-    setStartTime("09:00");
-    setEndTime("10:00");
-    setRecurrence("");
-    setError(null);
-    setBusy(false);
-  }, [open, initialDate]);
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +83,7 @@ export default function EventEditorSheet({
         recurrence: recurrence || undefined,
       });
       onCreated();
-      onClose();
+      close();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setBusy(false);
@@ -94,21 +93,21 @@ export default function EventEditorSheet({
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex max-h-[88%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-border-strong" />
         <div className="flex items-center justify-between px-[18px] pb-2.5 pt-3.5">
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Cancel

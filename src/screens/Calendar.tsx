@@ -223,12 +223,13 @@ export default function Calendar() {
         </div>
       </div>
 
-      <EventEditorSheet
-        open={editorOpen}
-        initialDate={selected}
-        onClose={() => setEditorOpen(false)}
-        onCreated={() => setRefreshKey((k) => k + 1)}
-      />
+      {editorOpen && (
+        <EventEditorSheet
+          initialDate={selected}
+          onClose={() => setEditorOpen(false)}
+          onCreated={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }
