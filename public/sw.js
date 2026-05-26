@@ -1,5 +1,5 @@
 // Minimal shell service worker for LifeOS.
-const CACHE = 'lifeos-shell-v5';
+const CACHE = 'lifeos-shell-v6';
 const SHELL = ['/', '/manifest.json'];
 
 self.addEventListener('install', (event) => {

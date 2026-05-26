@@ -2,11 +2,16 @@ import { useEffect, useState } from "react";
 import { exportAll, importAll } from "../lib/backup";
 
 interface Props {
-  open: boolean;
+  // Caller decides when to mount/unmount the sheet; this component only
+  // exists while it's meant to be visible. No `open` prop, no CSS-transform
+  // games — that pattern hit a real iOS rendering bug where the panel
+  // visually showed open but pointer-events-none was applied underneath.
   onClose: () => void;
 }
 
-export default function BackupSheet({ open, onClose }: Props) {
+const TRANSITION_MS = 280;
+
+export default function BackupSheet({ onClose }: Props) {
   const [json, setJson] = useState("");
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [importDraft, setImportDraft] = useState("");
@@ -16,16 +21,29 @@ export default function BackupSheet({ open, onClose }: Props) {
     kind: "ok" | "err";
   } | null>(null);
 
-  // Reset state when the sheet opens.
+  // Slide-in animation. Starts off-screen, transitions to visible the next
+  // frame after mount.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (open) {
-      setJson("");
-      setCounts(null);
-      setImportDraft("");
-      setShowImport(false);
-      setStatus(null);
-    }
-  }, [open]);
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Animated close — slide out, then tell the parent to unmount us.
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
+
+  // Safety net: pressing Escape always closes the sheet.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const generate = async () => {
     try {
@@ -82,14 +100,14 @@ export default function BackupSheet({ open, onClose }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[88%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
@@ -99,7 +117,7 @@ export default function BackupSheet({ open, onClose }: Props) {
             Backup
           </span>
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Done

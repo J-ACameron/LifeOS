@@ -13,7 +13,6 @@ import {
   type DailyMetricType,
 } from "../lib/health";
 import WeeklyReviewSheet from "../components/WeeklyReviewSheet";
-import { OPEN_BACKUP_EVENT } from "../App";
 import {
   disableNotifications,
   enableNotifications,
@@ -24,9 +23,10 @@ import {
 
 interface HomeProps {
   onOpenMetric: (type: DailyMetricType) => void;
+  onOpenBackup: () => void;
 }
 
-export default function Home({ onOpenMetric }: HomeProps) {
+export default function Home({ onOpenMetric, onOpenBackup }: HomeProps) {
   const [reviewOpen, setReviewOpen] = useState(false);
 
   // --- Calendar (live, tomorrow) ---
@@ -341,9 +341,7 @@ export default function Home({ onOpenMetric }: HomeProps) {
           <div className="space-y-2">
             <NotificationsRow />
             <button
-              onClick={() =>
-                document.dispatchEvent(new Event(OPEN_BACKUP_EVENT))
-              }
+              onClick={onOpenBackup}
               className="flex w-full items-center gap-3 rounded-[16px] border border-border bg-surface px-3.5 py-3 text-left hover:border-border-strong active:scale-[0.99]"
             >
               <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-surface-2 text-subtle">

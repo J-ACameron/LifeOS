@@ -14,10 +14,6 @@ import BackupSheet from "./components/BackupSheet";
 import type { DailyMetricType } from "./lib/health";
 import { COACH_CONFIG, type CoachKey } from "./lib/coaches";
 
-// Lightweight global event so Home's "Backup & restore" row can open the sheet
-// without prop-drilling through every screen.
-export const OPEN_BACKUP_EVENT = "lifeos:open-backup";
-
 const THEME_KEY = "lifeos:theme";
 type Tab = "home" | "calendar" | "fitness" | "macros" | "health" | "goals" | "notes";
 
@@ -63,12 +59,6 @@ export default function App() {
   const [backupOpen, setBackupOpen] = useState(false);
   const theme = useSyncExternalStore(subscribeTheme, getTheme, getTheme);
 
-  useEffect(() => {
-    const open = () => setBackupOpen(true);
-    document.addEventListener(OPEN_BACKUP_EVENT, open);
-    return () => document.removeEventListener(OPEN_BACKUP_EVENT, open);
-  }, []);
-
   // Shared handler so Home and Health both open the same MetricSheet for
   // sleep/water — calories still bounce over to the Macros tab.
   const openMetric = (m: DailyMetricType) => {
@@ -76,10 +66,12 @@ export default function App() {
     else setMetricSheet(m);
   };
 
+  const openBackup = () => setBackupOpen(true);
+
   return (
     <main className="relative mx-auto h-dvh max-w-[640px] overflow-hidden bg-bg">
       {tab === "home" ? (
-        <Home onOpenMetric={openMetric} />
+        <Home onOpenMetric={openMetric} onOpenBackup={openBackup} />
       ) : tab === "calendar" ? (
         <Calendar />
       ) : tab === "fitness" ? (
@@ -104,7 +96,7 @@ export default function App() {
         coachKey={tabToCoachKey(tab)}
       />
       <MetricSheet type={metricSheet} onClose={() => setMetricSheet(null)} />
-      <BackupSheet open={backupOpen} onClose={() => setBackupOpen(false)} />
+      {backupOpen && <BackupSheet onClose={() => setBackupOpen(false)} />}
 
       <TabBar value={tab} onChange={setTab} />
 
