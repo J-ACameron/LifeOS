@@ -301,7 +301,6 @@ export default function Chat({ onClose, coachKey }: Props) {
             className="flex h-11 items-center gap-2.5 rounded-full border border-border bg-surface pl-4 pr-1.5"
           >
             <input
-              autoFocus
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={coach.placeholder}
