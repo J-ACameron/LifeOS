@@ -21,9 +21,6 @@ export function GoogleAuthButton() {
   const authed = !!auth && !isExpired(auth)
   const [menuOpen, setMenuOpen] = useState(false)
   const [pending, setPending] = useState(false)
-  // True while a silent (no-UI) token refresh is in flight. Suppresses the
-  // "Sign in" button so a brief refresh moment doesn't flash a stale UI.
-  const [silentAttempting, setSilentAttempting] = useState(false)
 
   const login = useGoogleLogin({
     flow: 'implicit',
@@ -77,14 +74,11 @@ export function GoogleAuthButton() {
         })
       } catch (err) {
         console.error('silent renewal write failed', err)
-      } finally {
-        setSilentAttempting(false)
       }
     },
     onError: () => {
       // Silent renewal failed — leave the existing token alone, let the UI
       // surface the sign-in button when the user manually needs it.
-      setSilentAttempting(false)
     },
   })
 
@@ -99,20 +93,18 @@ export function GoogleAuthButton() {
 
     if (msUntilExpiry <= RENEW_BUFFER_MS) {
       // Already expired or close — refresh now.
-      setSilentAttempting(true)
       loginSilentRef.current()
       return
     }
 
     // Schedule a one-shot refresh 5 minutes before expiry.
     const handle = window.setTimeout(() => {
-      setSilentAttempting(true)
       loginSilentRef.current()
     }, msUntilExpiry - RENEW_BUFFER_MS)
     return () => window.clearTimeout(handle)
   }, [auth])
 
-  if (!authed && !silentAttempting) {
+  if (!authed) {
     return (
       <button
         onClick={() => {

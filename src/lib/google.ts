@@ -74,6 +74,11 @@ export async function revokeAndClear(): Promise<void> {
 
 // Helper: read auth from Dexie and run a fetch with the bearer token attached.
 // Throws if there's no valid auth — caller should prompt sign-in.
+//
+// If Google returns 401, the stored auth is wiped so the UI flips back to
+// the Sign-in button on the next render. This catches the case where the
+// token claims to be valid by our local clock but Google has already
+// revoked it (silent-renewal stale token, manual revocation, etc).
 export async function authedFetch(
   input: string,
   init: RequestInit = {},
@@ -84,7 +89,12 @@ export async function authedFetch(
   }
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${auth.accessToken}`)
-  return fetch(input, { ...init, headers })
+  const res = await fetch(input, { ...init, headers })
+  if (res.status === 401) {
+    await clearAuth()
+    throw new Error('not_authenticated')
+  }
+  return res
 }
 
 // Re-export the db so callers can subscribe via useLiveQuery if they prefer.
