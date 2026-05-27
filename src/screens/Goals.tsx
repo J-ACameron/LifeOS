@@ -18,7 +18,7 @@ export default function Goals() {
       () => db.goals.orderBy("createdAt").reverse().toArray(),
     ) ?? [];
 
-  const [target, setTarget] = useState<GoalSheetTarget>(null);
+  const [target, setTarget] = useState<GoalSheetTarget | null>(null);
 
   const active = goals.filter((g) => g.status !== "completed");
   const completed = goals.filter((g) => g.status === "completed");
@@ -93,7 +93,9 @@ export default function Goals() {
         )}
       </div>
 
-      <GoalSheet target={target} onClose={() => setTarget(null)} />
+      {target !== null && (
+        <GoalSheet target={target} onClose={() => setTarget(null)} />
+      )}
     </div>
   );
 }

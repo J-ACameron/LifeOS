@@ -216,18 +216,24 @@ export default function Fitness() {
         </Section>
       </div>
 
-      <WorkoutSheet
-        workoutId={openWorkoutId}
-        onClose={() => setOpenWorkoutId(null)}
-        onSwitchWorkout={(newId) => setOpenWorkoutId(newId)}
-      />
+      {openWorkoutId !== null && (
+        <WorkoutSheet
+          workoutId={openWorkoutId}
+          onClose={() => setOpenWorkoutId(null)}
+          onSwitchWorkout={(newId) => setOpenWorkoutId(newId)}
+        />
+      )}
 
-      <TemplateSheet
-        target={templateTarget}
-        onClose={() => setTemplateTarget(null)}
-      />
+      {templateTarget !== null && (
+        <TemplateSheet
+          target={templateTarget}
+          onClose={() => setTemplateTarget(null)}
+        />
+      )}
 
-      <CardioSheet open={cardioOpen} onClose={() => setCardioOpen(false)} />
+      {cardioOpen && (
+        <CardioSheet onClose={() => setCardioOpen(false)} />
+      )}
     </div>
   );
 }

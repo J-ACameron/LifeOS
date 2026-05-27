@@ -190,11 +190,13 @@ export default function Macros() {
         })}
       </div>
 
-      <FoodPickerSheet
-        meal={pickerMeal}
-        date={selectedDay}
-        onClose={() => setPickerMeal(null)}
-      />
+      {pickerMeal !== null && (
+        <FoodPickerSheet
+          meal={pickerMeal}
+          date={selectedDay}
+          onClose={() => setPickerMeal(null)}
+        />
+      )}
     </div>
   );
 }

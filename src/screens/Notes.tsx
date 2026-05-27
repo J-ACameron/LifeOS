@@ -13,7 +13,7 @@ export default function Notes() {
       db.notes.orderBy("updatedAt").reverse().toArray(),
     ) ?? [];
 
-  const [target, setTarget] = useState<NoteTarget>(null);
+  const [target, setTarget] = useState<NoteTarget | null>(null);
 
   return (
     <div className="relative flex h-full flex-col bg-bg">
@@ -53,7 +53,9 @@ export default function Notes() {
         )}
       </div>
 
-      <NoteEditorSheet target={target} onClose={() => setTarget(null)} />
+      {target !== null && (
+        <NoteEditorSheet target={target} onClose={() => setTarget(null)} />
+      )}
     </div>
   );
 }

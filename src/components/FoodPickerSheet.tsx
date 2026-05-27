@@ -28,17 +28,18 @@ interface NewFoodDraft {
 type View = "list" | "new" | "servings";
 
 interface Props {
-  meal: MealType | null;
+  // Parent only mounts when actually picking — no "closed" state inside.
+  meal: MealType;
   onClose: () => void;
   // Optional — date the logged entry should belong to. Defaults to today
   // (addMealEntry's own default).
   date?: number;
 }
 
+const TRANSITION_MS = 280;
+
 export default function FoodPickerSheet({ meal, onClose, date }: Props) {
-  const open = meal !== null;
-  const [renderMeal, setRenderMeal] = useState<MealType | null>(meal);
-  useEffect(() => { if (meal !== null) setRenderMeal(meal); }, [meal]);
+  const renderMeal = meal;
 
   const [view, setView] = useState<View>("list");
   const [query, setQuery] = useState("");
@@ -47,17 +48,16 @@ export default function FoodPickerSheet({ meal, onClose, date }: Props) {
   const [newFoodDraft, setNewFoodDraft] = useState<NewFoodDraft>({});
   const [scanStatus, setScanStatus] = useState<string | null>(null);
 
-  // Reset internal state when sheet opens.
+  // Slide-in animation.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (open) {
-      setView("list");
-      setQuery("");
-      setPicked(null);
-      setScannerOpen(false);
-      setNewFoodDraft({});
-      setScanStatus(null);
-    }
-  }, [open, renderMeal]);
+    const handle = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
 
   const onBarcodeDetected = async (barcode: string) => {
     setScannerOpen(false);
@@ -152,14 +152,14 @@ export default function FoodPickerSheet({ meal, onClose, date }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[88%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
@@ -181,7 +181,7 @@ export default function FoodPickerSheet({ meal, onClose, date }: Props) {
             </button>
           )}
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Done
@@ -239,18 +239,19 @@ export default function FoodPickerSheet({ meal, onClose, date }: Props) {
               food={picked}
               onConfirm={async (servings) => {
                 await addMealEntry(renderMeal, picked, servings, date);
-                onClose();
+                close();
               }}
             />
           )}
         </div>
       </div>
 
-      <BarcodeScannerSheet
-        open={scannerOpen}
-        onClose={() => setScannerOpen(false)}
-        onDetected={onBarcodeDetected}
-      />
+      {scannerOpen && (
+        <BarcodeScannerSheet
+          onClose={() => setScannerOpen(false)}
+          onDetected={onBarcodeDetected}
+        />
+      )}
     </>
   );
 }

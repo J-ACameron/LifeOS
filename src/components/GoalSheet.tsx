@@ -17,24 +17,30 @@ import {
   updateGoal,
 } from "../lib/goals";
 
-export type GoalSheetTarget = number | "new" | null;
+export type GoalSheetTarget = number | "new";
 
 interface Props {
+  // Parent only mounts when actually editing — no "closed" state inside.
   target: GoalSheetTarget;
   onClose: () => void;
 }
 
+const TRANSITION_MS = 280;
+
 export default function GoalSheet({ target, onClose }: Props) {
-  const open = target !== null;
+  const id = typeof target === "number" ? target : null;
+  const isCreating = target === "new";
 
-  // Hold last-rendered target so the sheet content survives the close animation.
-  const [renderedTarget, setRenderedTarget] = useState<GoalSheetTarget>(target);
+  // Slide-in animation.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (target !== null) setRenderedTarget(target);
-  }, [target]);
-
-  const id = typeof renderedTarget === "number" ? renderedTarget : null;
-  const isCreating = renderedTarget === "new";
+    const idAnim = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(idAnim);
+  }, []);
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
 
   const goal = useLiveQuery(
     () => (id !== null ? db.goals.get(id) : Promise.resolve(undefined)),
@@ -55,9 +61,8 @@ export default function GoalSheet({ target, onClose }: Props) {
   const [editing, setEditing] = useState(false);
   const [journalDraft, setJournalDraft] = useState("");
 
-  // Initialize form whenever the sheet opens or the underlying goal changes.
+  // Initialize form when the sheet mounts or the underlying goal loads.
   useEffect(() => {
-    if (!open) return;
     if (isCreating) {
       setTitle("");
       setDescription("");
@@ -77,7 +82,7 @@ export default function GoalSheet({ target, onClose }: Props) {
       setEditing(false);
       setJournalDraft("");
     }
-  }, [open, isCreating, goal]);
+  }, [isCreating, goal]);
 
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +98,7 @@ export default function GoalSheet({ target, onClose }: Props) {
         term,
         targetDate: targetMs,
       });
-      onClose();
+      close();
     } else if (id !== null) {
       await updateGoal(id, {
         title: t,
@@ -141,14 +146,14 @@ export default function GoalSheet({ target, onClose }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[92%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
@@ -158,7 +163,7 @@ export default function GoalSheet({ target, onClose }: Props) {
             {headerLabel}
           </span>
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Done

@@ -7,27 +7,29 @@ import {
 } from "../lib/cardio";
 
 interface Props {
-  open: boolean;
+  // Parent only mounts when actually logging — no "closed" state inside.
   onClose: () => void;
 }
 
-export default function CardioSheet({ open, onClose }: Props) {
+const TRANSITION_MS = 280;
+
+export default function CardioSheet({ onClose }: Props) {
   const [kind, setKind] = useState<CardioKind>("liss");
   const [duration, setDuration] = useState("");
   const [modality, setModality] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Reset form each time the sheet opens.
+  // Slide-in animation.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (open) {
-      setKind("liss");
-      setDuration("");
-      setModality("");
-      setNotes("");
-      setBusy(false);
-    }
-  }, [open]);
+    const handle = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
 
   const durationNum = parseFloat(duration);
   const valid = !Number.isNaN(durationNum) && durationNum > 0;
@@ -42,7 +44,7 @@ export default function CardioSheet({ open, onClose }: Props) {
         modality,
         notes,
       });
-      onClose();
+      close();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
       setBusy(false);
@@ -52,21 +54,21 @@ export default function CardioSheet({ open, onClose }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex max-h-[85%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-border-strong" />
         <div className="flex items-center justify-between gap-2 px-[18px] pb-2.5 pt-3.5">
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Cancel

@@ -32,21 +32,31 @@ import ExercisePickerSheet from "./ExercisePickerSheet";
 import ExerciseHistorySheet from "./ExerciseHistorySheet";
 
 interface Props {
-  workoutId: number | null;
+  // Parent only mounts the sheet when a workout is active — no "closed" state inside.
+  workoutId: number;
   onClose: () => void;
   onSwitchWorkout?: (newId: number) => void;
 }
 
-export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Props) {
-  const open = workoutId !== null;
-  const [renderedId, setRenderedId] = useState<number | null>(workoutId);
-  useEffect(() => { if (workoutId !== null) setRenderedId(workoutId); }, [workoutId]);
+const TRANSITION_MS = 280;
 
-  const id = renderedId;
+export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Props) {
+  const id = workoutId;
   const workout = useLiveQuery(
-    () => (id !== null ? db.workouts.get(id) : Promise.resolve(undefined)),
+    () => db.workouts.get(id),
     [id],
   );
+
+  // Slide-in animation.
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const handle = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
 
   const isActive = workout?.completedAt === undefined;
 
@@ -54,7 +64,6 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
   // shown as "prev" hints next to today's sets.
   const previousByExerciseId =
     useLiveQuery(async () => {
-      if (id === null) return {} as Record<number, WorkoutSet[]>;
       const all = await db.workouts
         .orderBy("date")
         .reverse()
@@ -124,7 +133,6 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
     setIndex: number,
     set: WorkoutSet,
   ) => {
-    if (id === null) return;
     if (isSetCompleted(set)) {
       await updateSet(id, exerciseIndex, setIndex, { completedAt: undefined });
     } else {
@@ -154,30 +162,29 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
   };
 
   const onFinish = async () => {
-    if (id === null || !workout) return;
+    if (!workout) return;
     if (workout.exercises.length === 0) {
       if (!confirm("This workout has no exercises. Finish anyway?")) return;
     }
     await finishWorkout(id);
-    onClose();
+    close();
   };
 
   const onDiscard = async () => {
-    if (id === null || !workout) return;
+    if (!workout) return;
     if (!confirm("Discard this workout? It won't be saved.")) return;
     await discardWorkout(id);
-    onClose();
+    close();
   };
 
   const onDelete = async () => {
-    if (id === null || !workout) return;
+    if (!workout) return;
     if (!confirm(`Delete "${workout.name}"? This is permanent.`)) return;
     await deleteWorkout(id);
-    onClose();
+    close();
   };
 
   const saveNameEdit = async () => {
-    if (id === null) return;
     await renameWorkout(id, nameDraft);
     setEditingName(false);
   };
@@ -231,23 +238,22 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
   };
 
   const onRepeat = async () => {
-    if (id === null) return;
     const newId = await cloneWorkout(id);
     if (onSwitchWorkout) onSwitchWorkout(newId);
-    else onClose();
+    else close();
   };
 
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[94%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
@@ -256,7 +262,7 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
         {/* Header */}
         <div className="flex items-center justify-between gap-2 px-[18px] pb-2 pt-3.5">
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Close
@@ -270,7 +276,7 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
             </button>
           ) : (
             <button
-              onClick={onClose}
+              onClick={close}
               className="px-1.5 py-1 text-base text-accent-fg"
             >
               Done
@@ -343,7 +349,7 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
                   key={`${exIdx}-${ex.exerciseId ?? ex.exerciseName}`}
                   exercise={ex}
                   exerciseIndex={exIdx}
-                  workoutId={id!}
+                  workoutId={id}
                   previousSets={
                     ex.exerciseId !== undefined
                       ? previousByExerciseId[ex.exerciseId] ?? []
@@ -364,7 +370,7 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
               ))}
 
               <button
-                onClick={() => setPickerOpenWorkoutId(id!)}
+                onClick={() => setPickerOpenWorkoutId(id)}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-[14px] border border-border bg-surface px-4 py-3 text-sm font-medium text-fg hover:border-border-strong"
               >
                 <PlusInCircle /> Add exercise
@@ -468,15 +474,19 @@ export default function WorkoutSheet({ workoutId, onClose, onSwitchWorkout }: Pr
         )}
       </div>
 
-      <ExercisePickerSheet
-        workoutId={pickerOpenWorkoutId}
-        onClose={() => setPickerOpenWorkoutId(null)}
-      />
-      <ExerciseHistorySheet
-        exerciseId={historyTarget?.id ?? null}
-        exerciseName={historyTarget?.name ?? null}
-        onClose={() => setHistoryTarget(null)}
-      />
+      {pickerOpenWorkoutId !== null && (
+        <ExercisePickerSheet
+          workoutId={pickerOpenWorkoutId}
+          onClose={() => setPickerOpenWorkoutId(null)}
+        />
+      )}
+      {historyTarget !== null && (
+        <ExerciseHistorySheet
+          exerciseId={historyTarget.id}
+          exerciseName={historyTarget.name}
+          onClose={() => setHistoryTarget(null)}
+        />
+      )}
     </>
   );
 }

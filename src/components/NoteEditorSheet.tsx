@@ -1,27 +1,20 @@
 import { useEffect, useState } from "react";
 import { db } from "../db";
 
-export type NoteTarget = number | "new" | null;
+export type NoteTarget = number | "new";
 
 interface Props {
+  // Parent only mounts when actually editing — no "closed" state inside.
   target: NoteTarget;
   onClose: () => void;
 }
 
 const AUTOSAVE_MS = 400;
+const TRANSITION_MS = 280;
 
 export default function NoteEditorSheet({ target, onClose }: Props) {
-  const open = target !== null;
-
-  // Keep the last-rendered target so content survives the close animation.
-  const [renderedTarget, setRenderedTarget] = useState<NoteTarget>(target);
-  useEffect(() => {
-    if (target !== null) setRenderedTarget(target);
-  }, [target]);
-
-  const isCreating = renderedTarget === "new";
-  const existingId =
-    typeof renderedTarget === "number" ? renderedTarget : null;
+  const isCreating = target === "new";
+  const existingId = typeof target === "number" ? target : null;
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -29,16 +22,24 @@ export default function NoteEditorSheet({ target, onClose }: Props) {
   // subsequent edits update the same row.
   const [draftId, setDraftId] = useState<number | null>(null);
 
-  // Load (or reset) when the sheet opens or switches to a different note.
+  // Slide-in animation.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (!open) return;
-    if (renderedTarget === "new") {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Load the note on mount (only fires once since target is fixed).
+  useEffect(() => {
+    if (target === "new") {
       setTitle("");
       setBody("");
       setDraftId(null);
-    } else if (typeof renderedTarget === "number") {
+      return;
+    }
+    if (typeof target === "number") {
       let cancelled = false;
-      db.notes.get(renderedTarget).then((n) => {
+      db.notes.get(target).then((n) => {
         if (cancelled || !n) return;
         setTitle(n.title);
         setBody(n.body);
@@ -48,11 +49,10 @@ export default function NoteEditorSheet({ target, onClose }: Props) {
         cancelled = true;
       };
     }
-  }, [open, renderedTarget]);
+  }, [target]);
 
   // Debounced auto-save.
   useEffect(() => {
-    if (!open) return;
     const persistedId = existingId ?? draftId;
     const hasContent = title.trim().length > 0 || body.trim().length > 0;
 
@@ -78,7 +78,7 @@ export default function NoteEditorSheet({ target, onClose }: Props) {
       }
     }, AUTOSAVE_MS);
     return () => window.clearTimeout(handle);
-  }, [open, title, body, existingId, draftId]);
+  }, [title, body, existingId, draftId]);
 
   const flushAndClose = () => {
     const persistedId = existingId ?? draftId;
@@ -99,19 +99,22 @@ export default function NoteEditorSheet({ target, onClose }: Props) {
         updatedAt: now,
       });
     }
-    onClose();
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
   };
 
   const onDelete = async () => {
     const persistedId = existingId ?? draftId;
     if (persistedId === null) {
       // Never persisted — just close.
-      onClose();
+      setShown(false);
+      window.setTimeout(onClose, TRANSITION_MS);
       return;
     }
     if (confirm("Delete this note?")) {
       await db.notes.delete(persistedId);
-      onClose();
+      setShown(false);
+      window.setTimeout(onClose, TRANSITION_MS);
     }
   };
 
@@ -122,12 +125,12 @@ export default function NoteEditorSheet({ target, onClose }: Props) {
       <div
         onClick={flushAndClose}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[92%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >

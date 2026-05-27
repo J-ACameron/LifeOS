@@ -13,24 +13,27 @@ import {
 type View = "list" | "new";
 
 interface Props {
-  workoutId: number | null;
+  // Parent only mounts when actually picking — no "closed" state inside.
+  workoutId: number;
   onClose: () => void;
 }
 
-export default function ExercisePickerSheet({ workoutId, onClose }: Props) {
-  const open = workoutId !== null;
-  const [renderedId, setRenderedId] = useState<number | null>(workoutId);
-  useEffect(() => { if (workoutId !== null) setRenderedId(workoutId); }, [workoutId]);
+const TRANSITION_MS = 280;
 
+export default function ExercisePickerSheet({ workoutId, onClose }: Props) {
   const [view, setView] = useState<View>("list");
   const [query, setQuery] = useState("");
 
+  // Slide-in animation.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (open) {
-      setView("list");
-      setQuery("");
-    }
-  }, [open, renderedId]);
+    const handle = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
 
   const allExercises = useLiveQuery(
     () => db.exercises.orderBy("name").toArray(),
@@ -57,9 +60,8 @@ export default function ExercisePickerSheet({ workoutId, onClose }: Props) {
   }, [allExercises, query]);
 
   const onPick = async (e: Exercise) => {
-    if (renderedId === null) return;
-    await addExerciseToWorkout(renderedId, e);
-    onClose();
+    await addExerciseToWorkout(workoutId, e);
+    close();
   };
 
   const headerLabel = view === "new" ? "New exercise" : "Add exercise";
@@ -67,14 +69,14 @@ export default function ExercisePickerSheet({ workoutId, onClose }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[88%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
@@ -93,7 +95,7 @@ export default function ExercisePickerSheet({ workoutId, onClose }: Props) {
             </button>
           )}
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Done
@@ -122,10 +124,8 @@ export default function ExercisePickerSheet({ workoutId, onClose }: Props) {
               initialName={query}
               onSave={async (input) => {
                 const created = await addCustomExercise(input);
-                if (renderedId !== null) {
-                  await addExerciseToWorkout(renderedId, created);
-                  onClose();
-                }
+                await addExerciseToWorkout(workoutId, created);
+                close();
               }}
             />
           )}

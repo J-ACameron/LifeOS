@@ -203,10 +203,15 @@ export async function buildWeeklyReviewUserMessage(): Promise<string> {
     .where('createdAt')
     .aboveOrEqual(weekAgo)
     .toArray()
-  const completedThisWeek = await db.tasks
-    .where('completedAt')
-    .aboveOrEqual(weekAgo)
+  // tasks.completedAt isn't indexed, so query by the indexed `status` field
+  // and filter the date in JS.
+  const completedTasksAll = await db.tasks
+    .where('status')
+    .equals('completed')
     .toArray()
+  const completedThisWeek = completedTasksAll.filter(
+    (t) => t.completedAt !== undefined && t.completedAt >= weekAgo,
+  )
   const stillOpen = allTasks.filter((t) => t.status !== 'completed')
   let tasksBlock = '## Tasks — this week\n'
   if (allTasks.length === 0 && completedThisWeek.length === 0) {

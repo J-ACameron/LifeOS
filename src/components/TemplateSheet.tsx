@@ -8,23 +8,30 @@ import {
   updateTemplate,
 } from "../lib/fitness";
 
-export type TemplateTarget = number | "new" | null;
+export type TemplateTarget = number | "new";
 
 interface Props {
+  // Parent only mounts when actually editing — no "closed" state inside.
   target: TemplateTarget;
   onClose: () => void;
 }
 
+const TRANSITION_MS = 280;
+
 export default function TemplateSheet({ target, onClose }: Props) {
-  const open = target !== null;
+  const isCreating = target === "new";
+  const id = typeof target === "number" ? target : null;
 
-  const [renderedTarget, setRenderedTarget] = useState<TemplateTarget>(target);
+  // Slide-in animation.
+  const [shown, setShown] = useState(false);
   useEffect(() => {
-    if (target !== null) setRenderedTarget(target);
-  }, [target]);
-
-  const isCreating = renderedTarget === "new";
-  const id = typeof renderedTarget === "number" ? renderedTarget : null;
+    const handle = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
+  const close = () => {
+    setShown(false);
+    window.setTimeout(onClose, TRANSITION_MS);
+  };
 
   const allExercises =
     useLiveQuery(() => db.exercises.orderBy("name").toArray()) ?? [];
@@ -39,9 +46,8 @@ export default function TemplateSheet({ target, onClose }: Props) {
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Initialize when sheet opens / target changes
+  // Initialize when sheet mounts or underlying template loads.
   useEffect(() => {
-    if (!open) return;
     if (isCreating) {
       setName("");
       setSelectedIds(new Set());
@@ -51,7 +57,7 @@ export default function TemplateSheet({ target, onClose }: Props) {
     }
     setSearch("");
     setBusy(false);
-  }, [open, isCreating, template]);
+  }, [isCreating, template]);
 
   const toggle = (exerciseId: number) => {
     setSelectedIds((prev) => {
@@ -100,7 +106,7 @@ export default function TemplateSheet({ target, onClose }: Props) {
           })),
         });
       }
-      onClose();
+      close();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
       setBusy(false);
@@ -110,21 +116,21 @@ export default function TemplateSheet({ target, onClose }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={close}
         className={`absolute inset-0 z-40 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          shown ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex h-[92%] flex-col rounded-t-[28px] border-t border-border bg-bg shadow-[0_-20px_40px_rgb(0_0_0/0.32)] transition-transform duration-300 ${
-          open ? "translate-y-0" : "translate-y-full pointer-events-none"
+          shown ? "translate-y-0" : "translate-y-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0.2, 1)" }}
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-border-strong" />
         <div className="flex items-center justify-between gap-2 px-[18px] pb-2.5 pt-3.5">
           <button
-            onClick={onClose}
+            onClick={close}
             className="px-1.5 py-1 text-base text-accent-fg"
           >
             Cancel
