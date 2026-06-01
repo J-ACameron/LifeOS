@@ -542,7 +542,7 @@ function NotificationsRow() {
 
   const sub =
     state.kind === "subscribed"
-      ? "On · habits 9:30 ET · weight + sleep 9:40 ET"
+      ? "On · weight + sleep 9:30 AM · habits 9:30 PM ET"
       : state.kind === "denied"
         ? "Blocked — change in device site settings"
         : state.kind === "unsupported"
