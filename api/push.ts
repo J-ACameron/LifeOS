@@ -29,6 +29,11 @@ const MESSAGES: Record<
     body: "Have you logged today's weight and sleep?",
     url: '/',
   },
+  backup: {
+    title: 'Weekly backup',
+    body: 'Sunday backup time — open Settings → Backup & restore.',
+    url: '/',
+  },
 }
 
 export default async function handler(
