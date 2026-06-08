@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Card, Section } from "../components/primitives";
 import FoodPickerSheet from "../components/FoodPickerSheet";
+import ExportSheet from "../components/ExportSheet";
+import { exportMacrosText } from "../lib/exports";
 import { db } from "../db";
 import { startOfToday } from "../lib/health";
 import {
@@ -60,14 +62,23 @@ export default function Macros() {
 
   const [pickerMeal, setPickerMeal] = useState<MealType | null>(null);
   const [editGoals, setEditGoals] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   return (
     <div className="relative flex h-full flex-col bg-bg">
       <div className="flex-1 overflow-y-auto px-[18px] pb-[160px] pt-[60px] [&::-webkit-scrollbar]:hidden">
         <header className="px-1.5 pb-4 pt-3.5">
-          <h1 className="m-0 text-2xl font-medium leading-[1.05] tracking-[-0.025em]">
-            Macros
-          </h1>
+          <div className="flex items-start justify-between gap-2">
+            <h1 className="m-0 text-2xl font-medium leading-[1.05] tracking-[-0.025em]">
+              Macros
+            </h1>
+            <button
+              onClick={() => setExportOpen(true)}
+              className="rounded-[8px] border border-border bg-surface px-2.5 py-1 text-xs text-subtle hover:border-border-strong hover:text-fg"
+            >
+              Export
+            </button>
+          </div>
           <div className="mt-1.5 flex items-center gap-2 font-mono text-xs tracking-[0.02em] text-muted">
             <span>
               {Math.round(totals.calories)} / {goals.calories} kcal
@@ -195,6 +206,14 @@ export default function Macros() {
           meal={pickerMeal}
           date={selectedDay}
           onClose={() => setPickerMeal(null)}
+        />
+      )}
+
+      {exportOpen && (
+        <ExportSheet
+          title="Food library"
+          generate={exportMacrosText}
+          onClose={() => setExportOpen(false)}
         />
       )}
     </div>

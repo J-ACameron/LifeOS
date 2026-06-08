@@ -10,6 +10,8 @@ import {
   type DailyMetricType,
 } from "../lib/health";
 import WeightHeatmap from "../components/WeightHeatmap";
+import ExportSheet from "../components/ExportSheet";
+import { exportHealthText } from "../lib/exports";
 
 type LoggableType = "weight" | "sleep" | "water";
 
@@ -54,6 +56,7 @@ interface Props {
 }
 
 export default function Health({ onOpenMetric }: Props) {
+  const [exportOpen, setExportOpen] = useState(false);
   const today = startOfToday();
   const fourteenDaysAgo = today - 13 * 86_400_000;
   const ninetyDaysAgo = today - 89 * 86_400_000;
@@ -101,9 +104,17 @@ export default function Health({ onOpenMetric }: Props) {
     <div className="relative flex h-full flex-col bg-bg">
       <div className="flex-1 overflow-y-auto px-[18px] pb-[160px] pt-[60px] [&::-webkit-scrollbar]:hidden">
         <header className="px-1.5 pb-3 pt-3.5">
-          <h1 className="m-0 text-2xl font-medium leading-[1.05] tracking-[-0.025em]">
-            Health
-          </h1>
+          <div className="flex items-start justify-between gap-2">
+            <h1 className="m-0 text-2xl font-medium leading-[1.05] tracking-[-0.025em]">
+              Health
+            </h1>
+            <button
+              onClick={() => setExportOpen(true)}
+              className="rounded-[8px] border border-border bg-surface px-2.5 py-1 text-xs text-subtle hover:border-border-strong hover:text-fg"
+            >
+              Export
+            </button>
+          </div>
           <div className="mt-1.5 font-mono text-xs tracking-[0.02em] text-muted">
             weight · sleep · water
           </div>
@@ -144,6 +155,14 @@ export default function Health({ onOpenMetric }: Props) {
           <TrendCard spec={WATER_SPEC} logs={waterLogs14} />
         </Section>
       </div>
+
+      {exportOpen && (
+        <ExportSheet
+          title="Weight"
+          generate={exportHealthText}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
     </div>
   );
 }

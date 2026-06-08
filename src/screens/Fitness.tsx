@@ -25,6 +25,8 @@ import { CARDIO_LABELS, deleteCardioSession } from "../lib/cardio";
 import WorkoutSheet from "../components/WorkoutSheet";
 import TemplateSheet, { type TemplateTarget } from "../components/TemplateSheet";
 import CardioSheet from "../components/CardioSheet";
+import ExportSheet from "../components/ExportSheet";
+import { exportFitnessText } from "../lib/exports";
 
 export default function Fitness() {
   useEffect(() => {
@@ -50,6 +52,7 @@ export default function Fitness() {
   const [openWorkoutId, setOpenWorkoutId] = useState<number | null>(null);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget>(null);
   const [cardioOpen, setCardioOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const templates =
     useLiveQuery(() =>
@@ -100,9 +103,17 @@ export default function Fitness() {
     <div className="relative flex h-full flex-col bg-bg">
       <div className="flex-1 overflow-y-auto px-[18px] pb-[160px] pt-[60px] [&::-webkit-scrollbar]:hidden">
         <header className="px-1.5 pb-3 pt-3.5">
-          <h1 className="m-0 text-2xl font-medium leading-[1.05] tracking-[-0.025em]">
-            Fitness
-          </h1>
+          <div className="flex items-start justify-between gap-2">
+            <h1 className="m-0 text-2xl font-medium leading-[1.05] tracking-[-0.025em]">
+              Fitness
+            </h1>
+            <button
+              onClick={() => setExportOpen(true)}
+              className="rounded-[8px] border border-border bg-surface px-2.5 py-1 text-xs text-subtle hover:border-border-strong hover:text-fg"
+            >
+              Export
+            </button>
+          </div>
           <div className="mt-1.5 font-mono text-xs tracking-[0.02em] text-muted">
             {completed.length}{" "}
             {completed.length === 1 ? "workout" : "workouts"}
@@ -233,6 +244,14 @@ export default function Fitness() {
 
       {cardioOpen && (
         <CardioSheet onClose={() => setCardioOpen(false)} />
+      )}
+
+      {exportOpen && (
+        <ExportSheet
+          title="Workouts"
+          generate={exportFitnessText}
+          onClose={() => setExportOpen(false)}
+        />
       )}
     </div>
   );
