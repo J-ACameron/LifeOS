@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { exportAll, importAll } from "../lib/backup";
+import { setSetting } from "../db";
 
 interface Props {
   // Caller decides when to mount/unmount the sheet; this component only
@@ -63,6 +64,10 @@ export default function BackupSheet({ onClose }: Props) {
     if (!json) return;
     try {
       await navigator.clipboard.writeText(json);
+      // Successful copy is our best signal the user actually has the backup
+      // out of the device. We can't know they saved it somewhere, but anything
+      // less than "they clicked Copy" is even weaker.
+      await setSetting("lastBackupAt", Date.now());
       setStatus({ text: "Copied to clipboard.", kind: "ok" });
     } catch {
       setStatus({

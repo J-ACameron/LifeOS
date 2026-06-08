@@ -3,9 +3,11 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { Card, Section } from "../components/primitives";
 import FoodPickerSheet from "../components/FoodPickerSheet";
 import FoodLibrarySheet from "../components/FoodLibrarySheet";
+import MealEntryEditSheet from "../components/MealEntryEditSheet";
 import ExportSheet from "../components/ExportSheet";
 import { exportMacrosText } from "../lib/exports";
 import { db } from "../db";
+import type { MealEntry } from "../db/types";
 import { startOfToday } from "../lib/health";
 import {
   MEAL_LABELS,
@@ -65,6 +67,7 @@ export default function Macros() {
   const [editGoals, setEditGoals] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<MealEntry | null>(null);
 
   const foodCount = useLiveQuery(() => db.foods.count()) ?? 0;
 
@@ -171,7 +174,11 @@ export default function Macros() {
                     key={e.id}
                     className="group flex items-start gap-3 border-t border-border px-3.5 py-3 first:border-t-0"
                   >
-                    <div className="min-w-0 flex-1">
+                    <button
+                      onClick={() => setEditingEntry(e)}
+                      className="min-w-0 flex-1 text-left"
+                      aria-label={`Edit ${e.foodName} servings`}
+                    >
                       <div className="text-base leading-tight">{e.foodName}</div>
                       <div className="mt-0.5 font-mono text-xs text-muted">
                         {e.servings !== 1 && (
@@ -182,7 +189,7 @@ export default function Macros() {
                         {Math.round(e.macros.protein)} F
                         {Math.round(e.macros.fat)}
                       </div>
-                    </div>
+                    </button>
                     <button
                       onClick={() => deleteMealEntry(e.id!)}
                       className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-[8px] text-subtle opacity-50 hover:bg-surface-2 hover:text-fg hover:opacity-100"
@@ -244,6 +251,13 @@ export default function Macros() {
 
       {libraryOpen && (
         <FoodLibrarySheet onClose={() => setLibraryOpen(false)} />
+      )}
+
+      {editingEntry && (
+        <MealEntryEditSheet
+          entry={editingEntry}
+          onClose={() => setEditingEntry(null)}
+        />
       )}
     </div>
   );

@@ -340,23 +340,7 @@ export default function Home({ onOpenMetric, onOpenBackup }: HomeProps) {
         <Section title="Settings">
           <div className="space-y-2">
             <NotificationsRow />
-            <button
-              onClick={onOpenBackup}
-              className="flex w-full items-center gap-3 rounded-[16px] border border-border bg-surface px-3.5 py-3 text-left hover:border-border-strong active:scale-[0.99]"
-            >
-              <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-surface-2 text-subtle">
-                <BackupIcon />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-base leading-tight text-fg">
-                  Backup & restore
-                </div>
-                <div className="mt-0.5 font-mono text-[11px] text-muted">
-                  Export all data as JSON or import from a backup
-                </div>
-              </div>
-              <span className="text-subtle">›</span>
-            </button>
+            <BackupRow onClick={onOpenBackup} />
           </div>
         </Section>
 
@@ -444,6 +428,50 @@ function ScrollIcon() {
         strokeLinecap="round"
       />
     </svg>
+  );
+}
+
+function BackupRow({ onClick }: { onClick: () => void }) {
+  // useLiveQuery so the "X days ago" updates as soon as the user copies a
+  // backup, without remounting the row.
+  const setting = useLiveQuery(() => db.settings.get("lastBackupAt"));
+  const ts = setting?.value as number | undefined;
+
+  const now = Date.now();
+  const daysAgo =
+    ts !== undefined ? Math.floor((now - ts) / 86_400_000) : null;
+  const stale = daysAgo !== null && daysAgo >= 14;
+  const never = daysAgo === null;
+
+  let metaText: string;
+  if (never) {
+    metaText = "Never backed up — your data only lives on this device.";
+  } else if (daysAgo === 0) {
+    metaText = "Last backed up today.";
+  } else if (daysAgo === 1) {
+    metaText = "Last backed up 1 day ago.";
+  } else {
+    metaText = `Last backed up ${daysAgo} days ago.`;
+  }
+
+  const metaClass = never || stale ? "text-accent-fg" : "text-muted";
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-[16px] border border-border bg-surface px-3.5 py-3 text-left hover:border-border-strong active:scale-[0.99]"
+    >
+      <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-surface-2 text-subtle">
+        <BackupIcon />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-base leading-tight text-fg">Backup & restore</div>
+        <div className={`mt-0.5 font-mono text-[11px] ${metaClass}`}>
+          {metaText}
+        </div>
+      </div>
+      <span className="text-subtle">›</span>
+    </button>
   );
 }
 

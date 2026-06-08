@@ -21,7 +21,12 @@ import {
   totalVolume,
 } from "../lib/fitness";
 import { installPPLULProgram } from "../lib/pplul";
-import { CARDIO_LABELS, deleteCardioSession } from "../lib/cardio";
+import {
+  CARDIO_LABELS,
+  CARDIO_WEEKLY_TARGETS,
+  countSessionsThisWeek,
+  deleteCardioSession,
+} from "../lib/cardio";
 import WorkoutSheet from "../components/WorkoutSheet";
 import TemplateSheet, { type TemplateTarget } from "../components/TemplateSheet";
 import CardioSheet from "../components/CardioSheet";
@@ -52,6 +57,7 @@ export default function Fitness() {
   const [openWorkoutId, setOpenWorkoutId] = useState<number | null>(null);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget>(null);
   const [cardioOpen, setCardioOpen] = useState(false);
+  const [cardioExpanded, setCardioExpanded] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
   const templates =
@@ -208,15 +214,29 @@ export default function Fitness() {
           title="Cardio"
           meta={cardioSessions.length > 0 ? `${cardioSessions.length}` : ""}
         >
+          <CardioWeeklyTile sessions={cardioSessions} />
           <Card>
             {cardioSessions.length === 0 && (
               <div className="px-3.5 py-3 text-sm text-muted">
                 No cardio logged. Aim for 2× Zone 2 and 1× HIIT per week.
               </div>
             )}
-            {cardioSessions.slice(0, 8).map((c) => (
+            {(cardioExpanded
+              ? cardioSessions
+              : cardioSessions.slice(0, 8)
+            ).map((c) => (
               <CardioRow key={c.id} session={c} />
             ))}
+            {cardioSessions.length > 8 && (
+              <button
+                onClick={() => setCardioExpanded((v) => !v)}
+                className="flex w-full items-center justify-center gap-2 border-t border-border px-3.5 py-2 text-xs text-subtle hover:bg-surface-2 hover:text-fg"
+              >
+                {cardioExpanded
+                  ? "Show less"
+                  : `Show all (${cardioSessions.length})`}
+              </button>
+            )}
             <button
               onClick={() => setCardioOpen(true)}
               className="flex w-full items-center justify-center gap-2 border-t border-border px-3.5 py-2.5 text-sm font-medium text-accent-fg hover:bg-surface-2"
@@ -253,6 +273,57 @@ export default function Fitness() {
           onClose={() => setExportOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+function CardioWeeklyTile({ sessions }: { sessions: CardioSession[] }) {
+  const counts = useMemo(() => countSessionsThisWeek(sessions), [sessions]);
+  const lissTarget = CARDIO_WEEKLY_TARGETS.liss;
+  const hiitTarget = CARDIO_WEEKLY_TARGETS.hiit;
+  const lissHit = counts.liss >= lissTarget;
+  const hiitHit = counts.hiit >= hiitTarget;
+
+  return (
+    <div className="mb-2 grid grid-cols-2 gap-2">
+      <WeeklyChip
+        label="Zone 2 / LISS"
+        value={counts.liss}
+        target={lissTarget}
+        hit={lissHit}
+      />
+      <WeeklyChip
+        label="HIIT"
+        value={counts.hiit}
+        target={hiitTarget}
+        hit={hiitHit}
+      />
+    </div>
+  );
+}
+
+function WeeklyChip({
+  label,
+  value,
+  target,
+  hit,
+}: {
+  label: string;
+  value: number;
+  target: number;
+  hit: boolean;
+}) {
+  return (
+    <div className="rounded-[12px] border border-border bg-surface px-3 py-2">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.06em] text-muted">
+        <span>{label}</span>
+        {hit && <span className="text-accent-fg">✓</span>}
+      </div>
+      <div className="mt-0.5 font-mono text-sm">
+        <span className={hit ? "text-accent-fg" : "text-fg"}>{value}</span>
+        <span className="text-subtle"> / {target}</span>
+        <span className="ml-1 text-[10px] text-subtle">this week</span>
+      </div>
     </div>
   );
 }

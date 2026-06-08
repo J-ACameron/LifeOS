@@ -87,6 +87,26 @@ export async function deleteMealEntry(id: number): Promise<void> {
   await db.meal_entries.delete(id)
 }
 
+// Change the servings on a logged meal entry. Macros are rescaled from the
+// entry's *original* per-serving snapshot so past entries stay predictable —
+// editing the source food later doesn't retroactively alter logged macros.
+export async function updateMealEntryServings(
+  id: number,
+  newServings: number,
+): Promise<void> {
+  if (newServings <= 0) throw new Error('servings must be > 0')
+  const entry = await db.meal_entries.get(id)
+  if (!entry) throw new Error('meal entry not found')
+  const perServing: Macros =
+    entry.servings > 0
+      ? scaleMacros(entry.macros, 1 / entry.servings)
+      : entry.macros
+  await db.meal_entries.update(id, {
+    servings: newServings,
+    macros: scaleMacros(perServing, newServings),
+  })
+}
+
 export type NewFood = Omit<Food, 'id' | 'createdAt' | 'useCount' | 'lastUsedAt'>
 
 export async function addFood(food: NewFood): Promise<Food> {
