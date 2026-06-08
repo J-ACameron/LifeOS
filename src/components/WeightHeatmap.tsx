@@ -69,6 +69,14 @@ export default function WeightHeatmap({ logs }: { logs: HealthLog[] }) {
     return m;
   }, [logs, monthStart, monthEnd]);
 
+  // All-time weight-by-day, used for the weekly average (which may straddle
+  // months — e.g. tapping Sunday Mar 31 should still include Apr 1's entry).
+  const weightByDayAll = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const l of logs) m.set(startOfDay(l.date), l.value);
+    return m;
+  }, [logs]);
+
   // Monthly average + min/max for shading scope.
   const { avg, min, max } = useMemo(() => {
     const vals = Array.from(weightByDay.values());
@@ -124,6 +132,27 @@ export default function WeightHeatmap({ logs }: { logs: HealthLog[] }) {
   const shownWeight =
     shownDay !== null ? weightByDay.get(shownDay) : undefined;
 
+  // Sunday→Saturday week containing `shownDay` (or today if nothing logged
+  // this month). Used for the weekly-average chip.
+  const weekInfo = useMemo(() => {
+    const anchor = shownDay ?? todayMs;
+    const d = new Date(anchor);
+    d.setHours(0, 0, 0, 0);
+    const sunday = new Date(d);
+    sunday.setDate(d.getDate() - d.getDay()); // 0 = Sunday
+    const weekStart = sunday.getTime();
+    const vals: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(sunday);
+      day.setDate(sunday.getDate() + i);
+      const w = weightByDayAll.get(day.getTime());
+      if (w !== undefined) vals.push(w);
+    }
+    const weekAvg =
+      vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+    return { weekStart, weekAvg, count: vals.length };
+  }, [shownDay, todayMs, weightByDayAll]);
+
   // Month navigation.
   const prevMonth = () =>
     setMonthAnchor(new Date(year, month - 1, 1).getTime());
@@ -139,12 +168,24 @@ export default function WeightHeatmap({ logs }: { logs: HealthLog[] }) {
 
   return (
     <div className="rounded-[16px] border border-border bg-surface px-3.5 py-3">
-      <div className="mb-2 flex items-baseline justify-between">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
         <div className="text-xs uppercase tracking-[0.06em] text-muted">
           Daily weight
         </div>
-        <div className="font-mono text-[11px] tracking-[0.02em] text-subtle">
-          {avg !== null ? `${avg.toFixed(1)} lb avg` : "—"}
+        <div className="flex flex-col items-end gap-0.5 font-mono text-[11px] leading-tight tracking-[0.02em]">
+          <span className="text-fg">
+            {weekInfo.weekAvg !== null ? (
+              <>
+                {weekInfo.weekAvg.toFixed(1)}
+                <span className="text-subtle"> lb · week avg</span>
+              </>
+            ) : (
+              <span className="text-subtle">— week avg</span>
+            )}
+          </span>
+          <span className="text-subtle">
+            {avg !== null ? `${avg.toFixed(1)} lb · month avg` : "— month avg"}
+          </span>
         </div>
       </div>
 
@@ -240,25 +281,43 @@ export default function WeightHeatmap({ logs }: { logs: HealthLog[] }) {
             Tap a day to see that day's weight
           </div>
         ) : (
-          <div className="flex items-baseline justify-between">
-            <span className="font-mono text-xs text-muted">
-              {new Date(shownDay).toLocaleDateString(undefined, {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              })}
-            </span>
-            <span className="font-mono text-sm text-fg">
-              {shownWeight !== undefined ? (
-                <>
-                  {shownWeight.toFixed(1)}
-                  <span className="text-xs text-muted"> lb</span>
-                </>
-              ) : (
-                <span className="text-subtle">no weigh-in</span>
-              )}
-            </span>
-          </div>
+          <>
+            <div className="flex items-baseline justify-between">
+              <span className="font-mono text-xs text-muted">
+                {new Date(shownDay).toLocaleDateString(undefined, {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+              <span className="font-mono text-sm text-fg">
+                {shownWeight !== undefined ? (
+                  <>
+                    {shownWeight.toFixed(1)}
+                    <span className="text-xs text-muted"> lb</span>
+                  </>
+                ) : (
+                  <span className="text-subtle">no weigh-in</span>
+                )}
+              </span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between font-mono text-[10px] text-subtle">
+              <span>
+                Week of{" "}
+                {new Date(weekInfo.weekStart).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+              <span>
+                {weekInfo.weekAvg !== null
+                  ? `${weekInfo.weekAvg.toFixed(1)} lb avg · ${weekInfo.count} ${
+                      weekInfo.count === 1 ? "entry" : "entries"
+                    }`
+                  : "no entries this week"}
+              </span>
+            </div>
+          </>
         )}
       </div>
     </div>
