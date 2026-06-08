@@ -99,6 +99,13 @@ export async function deleteFood(id: number): Promise<void> {
   await db.foods.delete(id)
 }
 
+// Edit an existing food in the library. Per-serving macros, name, brand,
+// serving size, and barcode can all change; useCount / lastUsedAt / createdAt
+// are preserved so history isn't disturbed.
+export async function updateFood(id: number, updates: NewFood): Promise<void> {
+  await db.foods.update(id, updates)
+}
+
 // Look up a food in the library by barcode (UPC / EAN). Used when scanning:
 // if the user has already saved this product, skip the OFF API + new-food
 // form and go straight to picking servings.

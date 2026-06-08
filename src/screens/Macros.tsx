@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Card, Section } from "../components/primitives";
 import FoodPickerSheet from "../components/FoodPickerSheet";
+import FoodLibrarySheet from "../components/FoodLibrarySheet";
 import ExportSheet from "../components/ExportSheet";
 import { exportMacrosText } from "../lib/exports";
 import { db } from "../db";
@@ -63,6 +64,9 @@ export default function Macros() {
   const [pickerMeal, setPickerMeal] = useState<MealType | null>(null);
   const [editGoals, setEditGoals] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+
+  const foodCount = useLiveQuery(() => db.foods.count()) ?? 0;
 
   return (
     <div className="relative flex h-full flex-col bg-bg">
@@ -199,6 +203,27 @@ export default function Macros() {
             </Section>
           );
         })}
+
+        <Section title="Library" meta={foodCount > 0 ? `${foodCount}` : ""}>
+          <Card>
+            <button
+              onClick={() => setLibraryOpen(true)}
+              className="flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-surface-2"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-base leading-tight text-fg">
+                  Browse food library
+                </div>
+                <div className="mt-0.5 font-mono text-[11px] text-muted">
+                  {foodCount === 0
+                    ? "No foods yet — add some via + Add food above."
+                    : `${foodCount} ${foodCount === 1 ? "food" : "foods"} · tap any to edit`}
+                </div>
+              </div>
+              <span className="text-subtle">›</span>
+            </button>
+          </Card>
+        </Section>
       </div>
 
       {pickerMeal !== null && (
@@ -215,6 +240,10 @@ export default function Macros() {
           generate={exportMacrosText}
           onClose={() => setExportOpen(false)}
         />
+      )}
+
+      {libraryOpen && (
+        <FoodLibrarySheet onClose={() => setLibraryOpen(false)} />
       )}
     </div>
   );
